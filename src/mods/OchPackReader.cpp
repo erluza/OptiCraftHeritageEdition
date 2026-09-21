@@ -147,47 +147,31 @@ static void generateCandidates(const std::string &path, std::vector<std::string>
     for (char &c : restSlash) if (c == '\\') c = '/';
     for (char &c : restBs) if (c == '/') c = '\\';
 
-    std::string restUpperSlash = restSlash;
-    std::string restUpperBs = restBs;
-    for (char &c : restUpperSlash) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    for (char &c : restUpperBs) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    std::string upperRestBs = restBs;
+    for (char &c : upperRestBs) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
-    std::vector<std::string> schemes;
+    std::string lowerScheme = scheme;
+    for (char &c : lowerScheme) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
     if (!scheme.empty())
     {
-        schemes.push_back(scheme);
-        std::string upperScheme = scheme;
-        for (char &c : upperScheme) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        schemes.push_back(upperScheme);
-        std::string lowerScheme = scheme;
-        for (char &c : lowerScheme) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        schemes.push_back(lowerScheme);
+        // 1. scheme/rest
+        addUniqueCandidate(candidates, lowerScheme + "/" + restSlash);
+        // 2. scheme:rest
+        addUniqueCandidate(candidates, lowerScheme + restSlash);
+
+        // CDROM ISO9660 variants with uppercase and ;1
+        if (lowerScheme.find("cdrom") != std::string::npos)
+        {
+            std::string upperScheme = "CDROM0:";
+            addUniqueCandidate(candidates, upperScheme + "\\" + upperRestBs + ";1");
+            addUniqueCandidate(candidates, upperScheme + "/" + upperRestBs + ";1");
+            addUniqueCandidate(candidates, lowerScheme + "/" + restSlash + ";1");
+        }
     }
     else
     {
-        schemes.push_back("");
-    }
-
-    const char *separators[] = { "", "/", "\\" };
-    const std::string *rests[] = { &restBs, &restSlash, &restUpperBs, &restUpperSlash };
-
-    for (const auto &s : schemes)
-    {
-        for (const char *sep : separators)
-        {
-            if (s.empty() && sep[0] != '\0')
-                continue;
-
-            for (const std::string *r : rests)
-            {
-                if (r->empty())
-                    continue;
-                std::string combined = s + sep + (*r);
-                addUniqueCandidate(candidates, combined);
-                addUniqueCandidate(candidates, combined + ";1");
-                addUniqueCandidate(candidates, combined + ";2");
-            }
-        }
+        addUniqueCandidate(candidates, restSlash);
     }
 }
 
@@ -365,16 +349,13 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath, std::vector<s
     if (outDebugLogs)
         outDebugLogs->push_back("Scanning: " + dirPath);
 
-    // 1. Try reading packlist.txt or mods.list in this directory
+    // 1. Try reading packlist.txt in this directory
     static const char *const LIST_NAMES[] = {
         "packlist.txt",
-        "PACKLIST.TXT",
-        "mods.list",
-        "MODS.LIST",
-        "mods.txt",
-        "MODS.TXT"
+        "PACKLIST.TXT"
     };
 
+    bool foundPackList = false;
     for (const char *listName : LIST_NAMES)
     {
         std::string listPath = PlatformStorage::join(dirPath, listName);
@@ -382,6 +363,7 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath, std::vector<s
         std::string resolvedListPath;
         if (readFileBytes(listPath, listData, &resolvedListPath) && !listData.empty())
         {
+            foundPackList = true;
             if (outDebugLogs)
                 outDebugLogs->push_back("Found " + std::string(listName) + " at " + resolvedListPath);
             std::string listContent(listData.begin(), listData.end());
@@ -396,77 +378,56 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath, std::vector<s
 
                 if (!line.empty() && line[0] != '#' && line[0] != ';')
                 {
-                    candidateFiles.push_back(line);
+                    bool duplicate = false;
+                    for (const auto &c : candidateFiles)
+                    {
+                        if (c == line)
+                        {
+                            duplicate = true;
+                            break;
+                        }
+                    }
+                    if (!duplicate)
+                        candidateFiles.push_back(line);
                 }
             }
             break;
         }
     }
 
-    // 2. Built-in candidate probe list for filesystems where opendir() is not supported (e.g. PCSX2 host:, CD-ROM)
-    static const char *const PROBE_NAMES[] = {
-        "TooManyItems.ochpack",
-        "toomanyitems.ochpack",
-        "TOOMANYITEMS.OCHPACK",
-        "ReiMinimap.ochpack",
-        "reiminimap.ochpack",
-        "REIMINIMAP.OCHPACK",
-        "SampleTestMod.ochpack",
-        "sampletestmod.ochpack",
-        "SAMPLETESTMOD.OCHPACK",
-        "CraftGuide.ochpack",
-        "craftguide.ochpack",
-        "CRAFTGUIDE.OCHPACK",
-        "OptiFine.ochpack",
-        "optifine.ochpack",
-        "OPTIFINE.OCHPACK",
-        "Mod.ochpack",
-        "mod.ochpack",
-        "MOD.OCHPACK",
-        "Test.ochpack",
-        "test.ochpack",
-        "TEST.OCHPACK"
-    };
-
-    for (const char *probeName : PROBE_NAMES)
+    // 2. Only if NO packlist was found, try directory enumeration or probe names
+    if (!foundPackList)
     {
-        bool alreadyCandidate = false;
-        for (const auto &c : candidateFiles)
+        std::vector<std::string> entries;
+        if (PlatformStorage::listPathEntries(dirPath, entries) && !entries.empty())
         {
-            if (c == probeName)
+            for (const auto &entry : entries)
             {
-                alreadyCandidate = true;
-                break;
+                if (entry.size() >= 8)
+                {
+                    std::string ext = entry.substr(entry.size() - 8);
+                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    if (ext == ".ochpack")
+                    {
+                        candidateFiles.push_back(entry);
+                    }
+                }
             }
         }
-        if (!alreadyCandidate)
-            candidateFiles.push_back(probeName);
-    }
 
-    // 3. Try standard directory enumeration (for platforms where opendir works, like PC & USB FAT32)
-    std::vector<std::string> entries;
-    if (PlatformStorage::listPathEntries(dirPath, entries))
-    {
-        for (const auto &entry : entries)
+        // 3. Fallback probes only if neither packlist nor directory entries found anything
+        if (candidateFiles.empty())
         {
-            if (entry.size() >= 8)
+            static const char *const PROBE_NAMES[] = {
+                "TooManyItems.ochpack",
+                "ReiMinimap.ochpack",
+                "SampleTestMod.ochpack",
+                "CraftGuide.ochpack"
+            };
+
+            for (const char *probeName : PROBE_NAMES)
             {
-                std::string ext = entry.substr(entry.size() - 8);
-                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                if (ext == ".ochpack")
-                {
-                    bool alreadyCandidate = false;
-                    for (const auto &c : candidateFiles)
-                    {
-                        if (c == entry)
-                        {
-                            alreadyCandidate = true;
-                            break;
-                        }
-                    }
-                    if (!alreadyCandidate)
-                        candidateFiles.push_back(entry);
-                }
+                candidateFiles.push_back(probeName);
             }
         }
     }

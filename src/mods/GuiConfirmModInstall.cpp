@@ -65,7 +65,7 @@ void GuiConfirmModInstall::keyTyped(char_t c, int_t key)
     GuiScreen::keyTyped(c, key);
 }
 
-void GuiConfirmModInstall::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
+void GuiConfirmModInstall::handleSpecializedMenuInput()
 {
 #if PLATFORM_PS2 || PLATFORM_WII
     const PlatformTextInputSnapshot pad = platformTextInputSnapshot(platformMenuPad());
@@ -75,7 +75,10 @@ void GuiConfirmModInstall::drawScreen(int_t mouseX, int_t mouseY, float_t partia
         return;
     }
 #endif
+}
 
+void GuiConfirmModInstall::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
+{
     drawDefaultBackground();
 
     // Title

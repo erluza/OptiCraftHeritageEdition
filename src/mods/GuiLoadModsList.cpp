@@ -43,7 +43,7 @@ public:
 
             if (doubleClicked)
             {
-                parent->mc->displayGuiScreen(new GuiConfirmModInstall(parent, packs[index]));
+                parent->setPendingConfirmIndex(index);
             }
         }
     }
@@ -160,45 +160,29 @@ void GuiLoadModsList::scanPacks()
         {
             scanDirs.push_back(PlatformStorage::join(inst, "mods"));
             scanDirs.push_back(PlatformStorage::join(inst, "MODS"));
-            scanDirs.push_back(inst);
             if (inst.back() == ':')
             {
+                scanDirs.push_back(inst + "mods");
                 scanDirs.push_back(inst + "/mods");
                 scanDirs.push_back(inst + "/MODS");
-                scanDirs.push_back(inst + "\\mods");
-                scanDirs.push_back(inst + "\\MODS");
-                scanDirs.push_back(inst + "/");
             }
         }
         scanDirs.push_back("cdrom0:/mods");
         scanDirs.push_back("cdrom0:/MODS");
-        scanDirs.push_back("cdrom0:\\MODS");
-        scanDirs.push_back("cdrom0:MODS");
-        scanDirs.push_back("cdrom0:mods");
-        scanDirs.push_back("cdrom0:/");
-        scanDirs.push_back("cdrom0:");
         scanDirs.push_back("host:mods");
         scanDirs.push_back("host:/mods");
-        scanDirs.push_back("host:");
-        scanDirs.push_back("host:/");
 #endif
         scanDirs.push_back("./mods");
         scanDirs.push_back("mods");
-        scanDirs.push_back(".");
     }
     else
     {
+        scanDirs.push_back("mass:/OptiCraftHeritage/mods");
         scanDirs.push_back("mass:/mods");
         scanDirs.push_back("mass:/MODS");
-        scanDirs.push_back("mass:/OptiCraftHeritage/mods");
-        scanDirs.push_back("mass:/OptiCraftHeritage/MODS");
-        scanDirs.push_back("mass:/");
-        scanDirs.push_back("mass0:/mods");
-        scanDirs.push_back("mass0:/MODS");
         scanDirs.push_back("mass0:/OptiCraftHeritage/mods");
-        scanDirs.push_back("mass0:/");
+        scanDirs.push_back("mass0:/mods");
         scanDirs.push_back("usb/mods");
-        scanDirs.push_back("usb");
     }
 
     for (const auto &dir : scanDirs)
@@ -220,6 +204,12 @@ void GuiLoadModsList::scanPacks()
                 availablePacks.push_back(p);
             }
         }
+
+        // If we found packs in this primary directory, stop probing fallback directories
+        if (!availablePacks.empty())
+        {
+            break;
+        }
     }
 }
 
@@ -237,7 +227,11 @@ void GuiLoadModsList::setSelectedPackIndex(int_t index)
 
 void GuiLoadModsList::initGui()
 {
-    scanPacks();
+    if (!scanned_)
+    {
+        scanPacks();
+        scanned_ = true;
+    }
 
     delete slotList;
     slotList = nullptr;
@@ -251,7 +245,7 @@ void GuiLoadModsList::initGui()
 
         controlList.push_back(new GuiButton(1, width / 2 - 155, height - 32, 150, 20, "Install Selected"));
         controlList.push_back(new GuiButton(2, width / 2 + 5, height - 32, 150, 20, "Back"));
-        setSelectedPackIndex(-1);
+        setSelectedPackIndex(selectedIndex);
     }
     else
     {
@@ -291,7 +285,18 @@ void GuiLoadModsList::keyTyped(char_t c, int_t key)
     GuiScreen::keyTyped(c, key);
 }
 
-void GuiLoadModsList::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
+void GuiLoadModsList::updateScreen()
+{
+    GuiScreen::updateScreen();
+    if (pendingConfirmIndex >= 0 && pendingConfirmIndex < static_cast<int_t>(availablePacks.size()))
+    {
+        int_t idx = pendingConfirmIndex;
+        pendingConfirmIndex = -1;
+        mc->displayGuiScreen(new GuiConfirmModInstall(this, availablePacks[idx]));
+    }
+}
+
+void GuiLoadModsList::handleSpecializedMenuInput()
 {
 #if PLATFORM_PS2 || PLATFORM_WII
     const PlatformTextInputSnapshot pad = platformTextInputSnapshot(platformMenuPad());
@@ -301,7 +306,10 @@ void GuiLoadModsList::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick
         return;
     }
 #endif
+}
 
+void GuiLoadModsList::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
+{
     if (slotList != nullptr)
     {
         slotList->drawScreen(mouseX, mouseY, partialTick);

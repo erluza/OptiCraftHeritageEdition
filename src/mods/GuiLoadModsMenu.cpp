@@ -56,7 +56,7 @@ void GuiLoadModsMenu::keyTyped(char_t c, int_t key)
     GuiScreen::keyTyped(c, key);
 }
 
-void GuiLoadModsMenu::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
+void GuiLoadModsMenu::handleSpecializedMenuInput()
 {
 #if PLATFORM_PS2 || PLATFORM_WII
     const PlatformTextInputSnapshot pad = platformTextInputSnapshot(platformMenuPad());
@@ -66,7 +66,10 @@ void GuiLoadModsMenu::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick
         return;
     }
 #endif
+}
 
+void GuiLoadModsMenu::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
+{
     drawDefaultBackground();
 
     drawCenteredString(fontRenderer, "Load Mods (.ochpack)", width / 2, 25, 0xFFFFFF);

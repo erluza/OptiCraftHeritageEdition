@@ -237,7 +237,7 @@ void GuiMods::keyTyped(char_t c, int_t key)
     GuiScreen::keyTyped(c, key);
 }
 
-void GuiMods::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
+void GuiMods::handleSpecializedMenuInput()
 {
 #if PLATFORM_PS2 || PLATFORM_WII
     const PlatformTextInputSnapshot pad = platformTextInputSnapshot(platformMenuPad());
@@ -248,7 +248,10 @@ void GuiMods::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
         return;
     }
 #endif
+}
 
+void GuiMods::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
+{
     if (slotList != nullptr)
         slotList->drawScreen(mouseX, mouseY, partialTick);
 

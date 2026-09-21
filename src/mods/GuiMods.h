@@ -17,6 +17,7 @@ public:
     void confirmClicked(bool confirmed, int_t id) override;
     void drawScreen(int_t mouseX, int_t mouseY, float_t partialTick) override;
     void keyTyped(char_t c, int_t key) override;
+    void handleSpecializedMenuInput() override;
     bool allowsPlatformPointerInput() const override { return true; }
 
     FontRenderer *getFont() { return fontRenderer; }
