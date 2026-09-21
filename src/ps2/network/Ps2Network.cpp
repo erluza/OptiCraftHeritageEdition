@@ -317,9 +317,54 @@ DiagnosticResult testConnection()
         res.pingOk = true;
     }
 
-    ::close(sock);
+    // Also test local PC Minecraft server at 192.168.0.52:25565
+    bool localServerOk = false;
+    int localMs = 0;
+    const int lsock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (lsock >= 0)
+    {
+        int nb = 1;
+        lwip_ioctl(lsock, FIONBIO, &nb);
+        sockaddr_in ltarget{};
+        ltarget.sin_len = sizeof(ltarget);
+        ltarget.sin_family = AF_INET;
+        ltarget.sin_port = htons(25565);
+        ltarget.sin_addr.s_addr = inet_addr("192.168.0.52");
 
-    if (res.pingOk)
+        auto lstart = std::chrono::steady_clock::now();
+        int lconn = ::connect(lsock, reinterpret_cast<sockaddr *>(&ltarget), sizeof(ltarget));
+        if (lconn < 0)
+        {
+            fd_set lws;
+            FD_ZERO(&lws);
+            FD_SET(lsock, &lws);
+            struct timeval ltv{ 0, 800000 }; // 800ms
+            if (::select(lsock + 1, nullptr, &lws, nullptr, &ltv) > 0)
+            {
+                int lerr = 0;
+                socklen_t llen = sizeof(lerr);
+                if (::getsockopt(lsock, SOL_SOCKET, SO_ERROR, &lerr, &llen) == 0 && lerr == 0)
+                    localServerOk = true;
+            }
+        }
+        else
+        {
+            localServerOk = true;
+        }
+        if (localServerOk)
+        {
+            auto lend = std::chrono::steady_clock::now();
+            localMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(lend - lstart).count());
+        }
+        ::close(lsock);
+    }
+
+    if (localServerOk)
+    {
+        res.pingOk = true;
+        res.statusMessage = "Online! IP: " + res.ipAddress + " | Local Server (192.168.0.52): " + std::to_string(localMs) + "ms OK";
+    }
+    else if (res.pingOk)
     {
         res.statusMessage = "Online! IP: " + res.ipAddress + " | Ping 8.8.8.8: " + std::to_string(res.pingMs) + "ms";
     }

@@ -56,14 +56,21 @@ public:
 		target.sin_family = AF_INET;
 		target.sin_port = htons(static_cast<unsigned short>(port));
 
-		unsigned long ip = inet_addr(host.c_str());
+		std::string resolvedHost = host;
+		if (resolvedHost == "localhost" || resolvedHost == "127.0.0.1")
+		{
+			MC_LOG_INFO("network", "[PS2] Remapping localhost/127.0.0.1 to host PC IP (192.168.0.52)\n");
+			resolvedHost = "192.168.0.52";
+		}
+
+		unsigned long ip = inet_addr(resolvedHost.c_str());
 		if (ip != INADDR_NONE)
 		{
 			target.sin_addr.s_addr = ip;
 		}
 		else
 		{
-			hostent *resolved = gethostbyname(host.c_str());
+			hostent *resolved = gethostbyname(resolvedHost.c_str());
 			if (resolved == nullptr || resolved->h_addr_list == nullptr || resolved->h_addr_list[0] == nullptr)
 			{
 				MC_LOG_WARN("network", "[PS2] Could not resolve host: %s\n", host.c_str());

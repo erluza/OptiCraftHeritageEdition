@@ -21,7 +21,7 @@ class ServerNBTStorage;
 // Set to 'false' to display the original vanilla placeholder screen
 // ("Online multiplayer is not available on this platform.").
 // ============================================================================
-inline constexpr bool PS2_ONLINE_MULTIPLAYER_ENABLED = false;
+inline constexpr bool PS2_ONLINE_MULTIPLAYER_ENABLED = true;
 
 // net.minecraft.src.GuiMultiplayer
 class GuiMultiplayer : public GuiScreen

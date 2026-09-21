@@ -142,6 +142,12 @@ void GuiMultiplayer::loadServerList()
     {
         MC_LOG_WARN("network", "Unable to read servers.dat: %s\n", exception.what());
     }
+
+    if (serverList.empty())
+    {
+        serverList.push_back(std::make_shared<ServerNBTStorage>("Local PC Server", "192.168.0.52:25565"));
+        serverList.push_back(std::make_shared<ServerNBTStorage>("Localhost (PC Auto-Bridge)", "127.0.0.1:25565"));
+    }
 }
 
 void GuiMultiplayer::saveServerList()
