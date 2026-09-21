@@ -16,8 +16,8 @@ constexpr int kMusicStream = 32;
 constexpr int kAssetIo = 48;
 // Network threads. Must run above main (64) so TCP sockets, packet reading and writing
 // are never starved by the 60fps frame loop busy-waiting on vsync.
+constexpr int kNetworkWorker = 49;
 constexpr int kNetworkReader = 50;
 constexpr int kNetworkWriter = 51;
-constexpr int kNetworkWorker = 52;
 }
 

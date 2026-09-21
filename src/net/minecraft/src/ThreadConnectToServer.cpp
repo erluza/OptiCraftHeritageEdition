@@ -13,6 +13,7 @@
 #include "java/String.h"
 #ifdef PS2_PLATFORM
 #include <kernel.h>
+#include "ps2/system/Ps2ThreadPriority.h"
 #endif
 
 ThreadConnectToServer::ThreadConnectToServer(GuiConnecting *guiconnecting, Minecraft *minecraft, const std::string &s, int_t i)
@@ -39,8 +40,13 @@ ThreadConnectToServer::~ThreadConnectToServer()
 
 void ThreadConnectToServer::start()
 {
+#ifdef PS2_PLATFORM
+	if (!worker.start(&ThreadConnectToServer::wiiThreadEntry, this, 32 * 1024, Ps2ThreadPriority::kNetworkWorker))
+		throw std::runtime_error("Could not create connection thread");
+#else
 	if (!worker.start(&ThreadConnectToServer::wiiThreadEntry, this, 32 * 1024, 64))
 		throw std::runtime_error("Could not create connection thread");
+#endif
 }
 
 void ThreadConnectToServer::cancel()
@@ -75,7 +81,7 @@ void *ThreadConnectToServer::wiiThreadEntry(void *argument)
 void ThreadConnectToServer::run()
 {
 #ifdef PS2_PLATFORM
-	ChangeThreadPriority(GetThreadId(), 52);
+	ChangeThreadPriority(GetThreadId(), Ps2ThreadPriority::kNetworkWorker);
 #endif
 	try
 	{

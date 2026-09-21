@@ -149,13 +149,6 @@ public:
 		nonblocking = 0;
 		lwip_ioctl(socketFd, FIONBIO, &nonblocking);
 
-		// Set receive and send timeouts to 10 seconds so dead connections don't hang
-		struct timeval rwTimeout{};
-		rwTimeout.tv_sec = 10;
-		rwTimeout.tv_usec = 0;
-		::setsockopt(socketFd, SOL_SOCKET, SO_RCVTIMEO, &rwTimeout, sizeof(rwTimeout));
-		::setsockopt(socketFd, SOL_SOCKET, SO_SNDTIMEO, &rwTimeout, sizeof(rwTimeout));
-
 		MC_LOG_INFO("network", "[PS2] Connected to %s\n", remoteAddress.c_str());
 		return true;
 	}
@@ -167,10 +160,25 @@ public:
 		    closing.load(std::memory_order_acquire))
 			return -1;
 
-		const int count = ::recv(socketFd, buffer, length, 0);
-		if (count > 0)
-			receivedBytes.fetch_add(static_cast<std::size_t>(count), std::memory_order_relaxed);
-		return count;
+		while (!closing.load(std::memory_order_acquire))
+		{
+			const int count = ::recv(socketFd, buffer, length, 0);
+			if (count > 0)
+			{
+				receivedBytes.fetch_add(static_cast<std::size_t>(count), std::memory_order_relaxed);
+				return count;
+			}
+			if (count == 0)
+			{
+				return 0;
+			}
+			if (errno == EINTR)
+			{
+				continue;
+			}
+			return -1;
+		}
+		return -1;
 	}
 
 	bool write(const char *buffer, int length) override
@@ -186,11 +194,17 @@ public:
 				return false;
 
 			const int count = ::send(socketFd, buffer + offset, length - offset, 0);
-			if (count <= 0)
-				return false;
-
-			sentBytes.fetch_add(static_cast<std::size_t>(count), std::memory_order_relaxed);
-			offset += count;
+			if (count > 0)
+			{
+				sentBytes.fetch_add(static_cast<std::size_t>(count), std::memory_order_relaxed);
+				offset += count;
+				continue;
+			}
+			if (count < 0 && errno == EINTR)
+			{
+				continue;
+			}
+			return false;
 		}
 		return true;
 	}

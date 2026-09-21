@@ -9,6 +9,8 @@
 #include <unistd.h>
 #elif defined(PS2_PLATFORM)
 #include <kernel.h>
+#include <unistd.h>
+#include "ps2/system/Ps2ThreadPriority.h"
 #endif
 
 #include "NetHandler.h"
@@ -359,9 +361,9 @@ void NetworkManager::closeConnection()
 	if (networkSocket != nullptr)
 		networkSocket->interruptRead();
 
-#ifdef WII_PLATFORM
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
 	// The writer closes the connection after the queued disconnect packet has
-	// been flushed. interruptRead() only shuts down the receive side on Wii.
+	// been flushed. interruptRead() only shuts down the receive side on consoles.
 #else
 	// Java can detach this helper safely because the NetworkManager remains GC-reachable.
 	// In C++, keep the delayed closer owned by the manager so it cannot outlive `this`.
@@ -401,7 +403,7 @@ void *NetworkManager::wiiWriteThreadEntry(void *argument)
 void NetworkManager::readThreadRun()
 {
 #ifdef PS2_PLATFORM
-	ChangeThreadPriority(GetThreadId(), 50);
+	ChangeThreadPriority(GetThreadId(), Ps2ThreadPriority::kNetworkReader);
 #endif
 	numReadThreads++;
 	try
@@ -425,7 +427,7 @@ void NetworkManager::readThreadRun()
 void NetworkManager::writeThreadRun()
 {
 #ifdef PS2_PLATFORM
-	ChangeThreadPriority(GetThreadId(), 51);
+	ChangeThreadPriority(GetThreadId(), Ps2ThreadPriority::kNetworkWriter);
 #endif
 	numWriteThreads++;
 	try
@@ -470,10 +472,9 @@ void NetworkManager::writeThreadRun()
 
 void NetworkManager::sleepThread()
 {
-#ifdef WII_PLATFORM
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
 	// A bounded sleep keeps shutdown latency low. The desktop condition variable
-	// is intentionally avoided: its wait backend is not implemented by the Wii
-	// libstdc++ build, for the same reason std::thread throws ENOSYS.
+	// is intentionally avoided: on consoles it can spin or deadlock cooperative schedulers.
 	usleep(2000);
 #else
 	std::unique_lock<std::mutex> lock(threadSleepLock);

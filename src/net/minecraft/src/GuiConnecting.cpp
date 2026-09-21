@@ -11,6 +11,7 @@
 #include <iostream>
 #ifdef PS2_PLATFORM
 #include <kernel.h>
+#include "ps2/system/Ps2ThreadPriority.h"
 #endif
 
 GuiConnecting::GuiConnecting(Minecraft *minecraft, const std::string &host, int_t port)
@@ -42,7 +43,10 @@ GuiConnecting::~GuiConnecting()
 void GuiConnecting::updateScreen()
 {
 #ifdef PS2_PLATFORM
-	RotateThreadReadyQueue(64);
+	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkWorker);
+	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkReader);
+	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkWriter);
+	RotateThreadReadyQueue(Ps2ThreadPriority::kMain);
 #endif
 	if (clientHandler == nullptr && connectThread != nullptr)
 		clientHandler = connectThread->takeHandler();
