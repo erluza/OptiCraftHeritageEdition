@@ -24,9 +24,12 @@ int load(const char* assetKey, const char* fallbackPath)
             // Ps2Assets returns a 64-byte aligned buffer. LMB copies the module
             // to the IOP before returning, so the EE-side buffer can be freed.
             sbv_patch_enable_lmb();
-            const int result = SifExecModuleBuffer(data, static_cast<int>(size), 0, nullptr, nullptr);
+            int mod_res = 0;
+            const int result = SifExecModuleBuffer(data, static_cast<int>(size), 0, nullptr, &mod_res);
             std::free(data);
-            MC_LOG_INFO("platform", "[PS2][irx] load %s -> %d\n", assetKey, result);
+            MC_LOG_INFO("platform", "[PS2][irx] load %s -> result=%d, mod_res=%d\n", assetKey, result, mod_res);
+            if (result < 0 || mod_res == 1)
+                return -1;
             return result;
         }
         std::free(data);
@@ -34,8 +37,11 @@ int load(const char* assetKey, const char* fallbackPath)
 
     if (fallbackPath && fallbackPath[0] != '\0')
     {
-        const int result = SifLoadModule(fallbackPath, 0, nullptr);
-        MC_LOG_INFO("platform", "[PS2][irx] load %s -> %d\n", fallbackPath, result);
+        int mod_res = 0;
+        const int result = SifLoadStartModule(fallbackPath, 0, nullptr, &mod_res);
+        MC_LOG_INFO("platform", "[PS2][irx] load %s -> result=%d, mod_res=%d\n", fallbackPath, result, mod_res);
+        if (result < 0 || mod_res == 1)
+            return -1;
         return result;
     }
 

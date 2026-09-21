@@ -9,21 +9,24 @@
 #include <cstdio>
 #include <cstring>
 #include <mutex>
-#include <thread>
+#include <string>
+
+#define LIBCGLUE_SYS_SOCKET_ALIASES 1
+#include <sys/time.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#include <kernel.h>
+#include <delaythread.h>
 
 extern "C"
 {
-#include <kernel.h>
 #include <netman.h>
 #include <ps2ip.h>
-}
-
 #undef lwip_ioctl
-extern "C" int lwip_ioctl(int s, long cmd, void *argp);
-
-#include <sys/time.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+int lwip_ioctl(int s, long cmd, void *argp);
+}
 
 namespace Ps2Network
 {
@@ -64,10 +67,17 @@ bool initialize()
     MC_LOG_INFO("network", "[PS2] Initializing network subsystem...\n");
 
     // 1. Load IOP network modules
-    Ps2IrxLoader::load("irx/ps2dev9.irx", "host:ps2dev9.irx");
-    Ps2IrxLoader::load("irx/netman.irx", "host:netman.irx");
-    Ps2IrxLoader::load("irx/smap.irx", "host:smap.irx");
-    Ps2IrxLoader::load("irx/ps2ip.irx", "host:ps2ip.irx");
+    int r_dev9 = Ps2IrxLoader::load("irx/ps2dev9.irx", "host:ps2dev9.irx");
+    int r_netman = Ps2IrxLoader::load("irx/netman.irx", "host:netman.irx");
+    int r_smap = Ps2IrxLoader::load("irx/smap.irx", "host:smap.irx");
+    int r_ps2ip = Ps2IrxLoader::load("irx/ps2ip.irx", "host:ps2ip.irx");
+
+    if (r_dev9 < 0 || r_netman < 0 || r_smap < 0 || r_ps2ip < 0)
+    {
+        MC_LOG_ERROR("network", "[PS2] Network modules failed to load (dev9=%d, netman=%d, smap=%d, ps2ip=%d)\n",
+                     r_dev9, r_netman, r_smap, r_ps2ip);
+        return false;
+    }
 
     // 2. Initialize NETMAN service
     int res = NetManInit();
@@ -101,34 +111,27 @@ bool initialize()
 
     s_initialized = true;
 
-    // 6. Bounded poll for link and DHCP lease (up to ~2.5 seconds, non-fatal if offline)
-    for (int attempt = 0; attempt < 25; ++attempt)
+    // Quick non-blocking probe for link and existing IP lease
+    if (checkLinkState())
     {
-        if (checkLinkState())
+        if (ps2ip_getconfig(ifName, &ipInfo) >= 0)
         {
-            if (ps2ip_getconfig(ifName, &ipInfo) >= 0)
+            unsigned long rawIp = ipInfo.ipaddr.s_addr;
+            if (rawIp != 0 && (ipInfo.dhcp_status == DHCP_STATE_BOUND || ipInfo.dhcp_status == DHCP_STATE_OFF))
             {
-                unsigned long rawIp = ipInfo.ipaddr.s_addr;
-                if (rawIp != 0 && (ipInfo.dhcp_status == DHCP_STATE_BOUND || ipInfo.dhcp_status == DHCP_STATE_OFF))
-                {
-                    char buf[32];
-                    std::snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
-                        static_cast<unsigned>(rawIp & 0xFF),
-                        static_cast<unsigned>((rawIp >> 8) & 0xFF),
-                        static_cast<unsigned>((rawIp >> 16) & 0xFF),
-                        static_cast<unsigned>((rawIp >> 24) & 0xFF));
-                    s_ipAddress = buf;
-                    s_ready = true;
-                    MC_LOG_INFO("network", "[PS2] Network link UP, DHCP bound! IP: %s\n", s_ipAddress.c_str());
-                    return true;
-                }
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
+                    static_cast<unsigned>(rawIp & 0xFF),
+                    static_cast<unsigned>((rawIp >> 8) & 0xFF),
+                    static_cast<unsigned>((rawIp >> 16) & 0xFF),
+                    static_cast<unsigned>((rawIp >> 24) & 0xFF));
+                s_ipAddress = buf;
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    MC_LOG_WARN("network", "[PS2] Network initialized, waiting for link or DHCP lease\n");
     s_ready = true;
+    MC_LOG_INFO("network", "[PS2] Network stack initialized\n");
     return true;
 }
 
@@ -149,21 +152,28 @@ DiagnosticResult testConnection()
     DiagnosticResult res;
     if (!initialize())
     {
-        res.statusMessage = "Error: Fallo al inicializar hardware/IRX";
+        res.statusMessage = "Network hardware not detected (IRX failed)";
         return res;
     }
     res.hardwareOk = true;
 
     if (!checkLinkState())
     {
-        res.statusMessage = "Cable desconectado (Link Down)";
+        res.statusMessage = "Link down (Ethernet cable disconnected)";
         return res;
     }
     res.linkUp = true;
 
-    // Refresh IP info from SMAP interface
+    // Refresh IP info from SMAP interface; if DHCP is negotiating, wait briefly
     char ifName[4] = "sm0";
     t_ip_info ipInfo{};
+    for (int i = 0; i < 15; ++i)
+    {
+        if (ps2ip_getconfig(ifName, &ipInfo) >= 0 && ipInfo.ipaddr.s_addr != 0)
+            break;
+        DelayThread(100000); // 100ms
+    }
+
     if (ps2ip_getconfig(ifName, &ipInfo) >= 0)
     {
         unsigned long rawIp = ipInfo.ipaddr.s_addr;
@@ -185,15 +195,15 @@ DiagnosticResult testConnection()
 
     if (!res.hasIp)
     {
-        res.statusMessage = "Enlace activo: Esperando IP de DHCP...";
+        res.statusMessage = "Link up | Waiting for DHCP lease...";
         return res;
     }
 
-    // Try TCP connect to 8.8.8.8:53 with a 2-second timeout
+    // Try TCP connect to 8.8.8.8:53 with a 1.2-second timeout
     const int sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock < 0)
     {
-        res.statusMessage = "IP: " + res.ipAddress + " | Error socket";
+        res.statusMessage = "IP: " + res.ipAddress + " | Socket error";
         return res;
     }
 
@@ -215,8 +225,8 @@ DiagnosticResult testConnection()
         FD_ZERO(&writeSet);
         FD_SET(sock, &writeSet);
         struct timeval tv{};
-        tv.tv_sec = 2;
-        tv.tv_usec = 0;
+        tv.tv_sec = 1;
+        tv.tv_usec = 200000;
         int sel = ::select(sock + 1, nullptr, &writeSet, nullptr, &tv);
         if (sel > 0)
         {
@@ -245,7 +255,7 @@ DiagnosticResult testConnection()
     }
     else
     {
-        res.statusMessage = "Red local OK: " + res.ipAddress + " | Sin conexion a 8.8.8.8";
+        res.statusMessage = "LAN OK: " + res.ipAddress + " | Ping 8.8.8.8 timed out";
     }
 
     return res;

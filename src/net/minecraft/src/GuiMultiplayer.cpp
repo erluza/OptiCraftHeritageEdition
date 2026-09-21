@@ -40,8 +40,8 @@ namespace
 {
 std::string s_netTestStatus;
 int_t s_netTestColor = 0xa0a0a0;
-std::mutex s_netTestMutex;
 bool s_netTesting = false;
+bool s_netTestPending = false;
 }
 
 std::atomic<int_t> GuiMultiplayer::threadsPending{0};
@@ -61,6 +61,24 @@ GuiMultiplayer::~GuiMultiplayer()
 
 void GuiMultiplayer::updateScreen()
 {
+    if (s_netTestPending)
+    {
+        s_netTestPending = false;
+#if defined(PS2_PLATFORM)
+        Ps2Network::DiagnosticResult res = Ps2Network::testConnection();
+        s_netTestStatus = res.statusMessage;
+        if (res.pingOk)
+            s_netTestColor = 0x55ff55;
+        else if (res.hasIp)
+            s_netTestColor = 0xffaa00;
+        else
+            s_netTestColor = 0xff5555;
+#else
+        s_netTestStatus = "Online (Desktop) | Ping 8.8.8.8 OK";
+        s_netTestColor = 0x55ff55;
+#endif
+        s_netTesting = false;
+    }
 }
 
 void GuiMultiplayer::initGui()
@@ -168,7 +186,10 @@ void GuiMultiplayer::initGuiControls()
                                         translate->translateKey("selectServer.refresh")));
     controlList.push_back(new GuiButton(0, width / 2 + 80, height - 28, 75, 20,
                                         translate->translateKey("gui.cancel")));
-    controlList.push_back(new GuiButton(500, width - 76, 6, 70, 20, "Test Red"));
+#ifdef PS2_PLATFORM
+    Ps2Network::initialize();
+#endif
+    controlList.push_back(new GuiButton(500, width - 96, 6, 90, 20, "Test Network"));
 
     const bool valid = selectedServer >= 0 && selectedServer < (int_t)serverList.size();
     buttonSelect->enabled = valid;
@@ -250,34 +271,12 @@ void GuiMultiplayer::actionPerformed(GuiButton *button)
 
 void GuiMultiplayer::startNetworkTest()
 {
-    {
-        std::lock_guard<std::mutex> lock(s_netTestMutex);
-        if (s_netTesting)
-            return;
-        s_netTesting = true;
-    }
-
-    s_netTestStatus = "Probando red...";
+    if (s_netTesting)
+        return;
+    s_netTesting = true;
+    s_netTestPending = true;
+    s_netTestStatus = "Testing network...";
     s_netTestColor = 0xffff55;
-
-    std::thread([]() {
-#if defined(PS2_PLATFORM)
-        ChangeThreadPriority(GetThreadId(), 52);
-        Ps2Network::DiagnosticResult res = Ps2Network::testConnection();
-        s_netTestStatus = res.statusMessage;
-        if (res.pingOk)
-            s_netTestColor = 0x55ff55;
-        else if (res.hasIp)
-            s_netTestColor = 0xffaa00;
-        else
-            s_netTestColor = 0xff5555;
-#else
-        s_netTestStatus = "Online (Desktop) | Ping 8.8.8.8 OK";
-        s_netTestColor = 0x55ff55;
-#endif
-        std::lock_guard<std::mutex> lock(s_netTestMutex);
-        s_netTesting = false;
-    }).detach();
 }
 
 void GuiMultiplayer::confirmClicked(bool confirmed, int_t id)
