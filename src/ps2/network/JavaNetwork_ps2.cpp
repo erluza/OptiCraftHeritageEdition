@@ -24,6 +24,7 @@
 
 extern "C"
 {
+#undef lwip_ioctl
 int lwip_ioctl(int s, long cmd, void *argp);
 }
 
@@ -58,9 +59,12 @@ public:
 		target.sin_port = htons(static_cast<unsigned short>(port));
 
 		std::string resolvedHost = host;
-		if (resolvedHost == "localhost" || resolvedHost == "127.0.0.1")
+		if (resolvedHost == "localhost" || resolvedHost == "127.0.0.1" ||
+		    resolvedHost == "1" || resolvedHost == "11" || resolvedHost == "0" ||
+		    resolvedHost.empty())
 		{
-			MC_LOG_INFO("network", "[PS2] Remapping localhost/127.0.0.1 to host PC IP (192.168.0.52)\n");
+			MC_LOG_INFO("network", "[PS2] Remapping '%s' to host PC IP (192.168.0.52)\n", host.c_str());
+			printf("[PS2 Network] Remapping '%s' to host PC IP (192.168.0.52)\n", host.c_str());
 			resolvedHost = "192.168.0.52";
 		}
 
@@ -94,35 +98,26 @@ public:
 		int nodelay = 1;
 		::setsockopt(socketFd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
-		// Use non-blocking connect with a 10-second timeout.
-		// PS2 lwIP blocking connect has NO timeout, so an unreachable host
-		// would hang the connection thread forever.
+		// Set non-blocking mode with REAL lwip_ioctl
 		int nb = 1;
 		lwip_ioctl(socketFd, FIONBIO, &nb);
 
 		int connRes = ::connect(socketFd, reinterpret_cast<sockaddr *>(&target), sizeof(target));
-		if (connRes < 0 && errno != EINPROGRESS)
-		{
-			printf("[PS2 Network] connect() failed immediately: res=%d, errno=%d\n", connRes, errno);
-			close();
-			return false;
-		}
-
-		if (connRes != 0)
+		if (connRes < 0)
 		{
 			// Wait for connection to complete or timeout
 			fd_set writeSet;
 			FD_ZERO(&writeSet);
 			FD_SET(socketFd, &writeSet);
 			struct timeval tv{};
-			tv.tv_sec = 10;
+			tv.tv_sec = 6;
 			tv.tv_usec = 0;
 
-			printf("[PS2 Network] Waiting for connect (up to 10s)...\n");
+			printf("[PS2 Network] Waiting for TCP connect to %s (up to 6s)...\n", resolvedHost.c_str());
 			int sel = ::select(socketFd + 1, nullptr, &writeSet, nullptr, &tv);
 			if (sel <= 0)
 			{
-				printf("[PS2 Network] connect() timed out (select=%d, errno=%d)\n", sel, errno);
+				printf("[PS2 Network] connect() timed out (select=%d)\n", sel);
 				close();
 				return false;
 			}

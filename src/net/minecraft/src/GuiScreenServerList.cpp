@@ -34,6 +34,10 @@ void GuiScreenServerList::initGui()
     controlList.push_back(new GuiButton(0, width / 2 - 100, height / 4 + 108, translate->translateKey("selectServer.select")));
     controlList.push_back(new GuiButton(1, width / 2 - 100, height / 4 + 132, translate->translateKey("gui.cancel")));
     delete serverTextField;
+#ifdef PS2_PLATFORM
+    if (lastAddress.empty())
+        lastAddress = "192.168.0.52:25565";
+#endif
     serverTextField = new GuiTextField(this, fontRenderer, width / 2 - 100, 116, 200, 20, lastAddress);
     serverTextField->setMaxStringLength(128);
     serverTextField->setFocused(true);

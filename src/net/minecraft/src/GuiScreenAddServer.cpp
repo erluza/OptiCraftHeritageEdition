@@ -39,8 +39,14 @@ void GuiScreenAddServer::initGui()
     serverName = new GuiTextField(this, fontRenderer, width / 2 - 100, 76, 200, 20,
                                   serverNBTStorage != nullptr ? serverNBTStorage->name : "");
     serverName->setFocused(true);
+#ifdef PS2_PLATFORM
+    std::string defaultHost = (serverNBTStorage != nullptr && !serverNBTStorage->host.empty())
+                                ? serverNBTStorage->host : "192.168.0.52:25565";
+    serverAddress = new GuiTextField(this, fontRenderer, width / 2 - 100, 116, 200, 20, defaultHost);
+#else
     serverAddress = new GuiTextField(this, fontRenderer, width / 2 - 100, 116, 200, 20,
                                      serverNBTStorage != nullptr ? serverNBTStorage->host : "");
+#endif
     serverAddress->setMaxStringLength(128);
     updateAddButtonState();
 }

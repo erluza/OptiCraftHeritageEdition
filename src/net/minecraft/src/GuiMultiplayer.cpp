@@ -114,38 +114,38 @@ void GuiMultiplayer::loadServerList()
 {
     serverList.clear();
     File *dataDir = Minecraft::getMinecraftDir();
-    if (mc == nullptr || dataDir == nullptr)
-        return;
-
-    std::unique_ptr<File> file(File::open(*dataDir, "servers.dat"));
-    if (!file->exists())
-        return;
-
-    try
+    if (dataDir != nullptr)
     {
-        std::unique_ptr<std::istream> input(file->toStreamIn());
-        std::unique_ptr<NBTTagCompound> root(CompressedStreamTools::readCompound(*input));
-        if (root == nullptr || !root->hasKey("servers"))
-            return;
-        NBTTagList *list = root->getTagList("servers");
-        for (int_t i = 0; i < list->tagCount(); ++i)
+        std::unique_ptr<File> file(File::open(*dataDir, "servers.dat"));
+        if (file && file->exists())
         {
-            NBTTagCompound *tag = dynamic_cast<NBTTagCompound *>(list->tagAt(i));
-            if (tag == nullptr)
-                continue;
-            std::shared_ptr<ServerNBTStorage> server(ServerNBTStorage::createServerNBTStorage(tag));
-            if (server != nullptr)
-                serverList.push_back(server);
+            try
+            {
+                std::unique_ptr<std::istream> input(file->toStreamIn());
+                std::unique_ptr<NBTTagCompound> root(CompressedStreamTools::readCompound(*input));
+                if (root != nullptr && root->hasKey("servers"))
+                {
+                    NBTTagList *list = root->getTagList("servers");
+                    for (int_t i = 0; i < list->tagCount(); ++i)
+                    {
+                        NBTTagCompound *tag = dynamic_cast<NBTTagCompound *>(list->tagAt(i));
+                        if (tag == nullptr)
+                            continue;
+                        std::shared_ptr<ServerNBTStorage> server(ServerNBTStorage::createServerNBTStorage(tag));
+                        if (server != nullptr)
+                            serverList.push_back(server);
+                    }
+                }
+            }
+            catch (const std::exception &exception)
+            {
+                MC_LOG_WARN("network", "Unable to read servers.dat: %s\n", exception.what());
+            }
         }
-    }
-    catch (const std::exception &exception)
-    {
-        MC_LOG_WARN("network", "Unable to read servers.dat: %s\n", exception.what());
     }
 
 #ifdef PS2_PLATFORM
     // Always ensure default servers are present in the list for PS2.
-    // The user may have saved a servers.dat with invalid addresses.
     {
         auto hasHost = [&](const std::string &host) -> bool {
             for (const auto &s : serverList)
@@ -165,6 +165,7 @@ void GuiMultiplayer::loadServerList()
         serverList.push_back(std::make_shared<ServerNBTStorage>("Localhost (PC Auto-Bridge)", "127.0.0.1:25565"));
     }
 #endif
+    printf("[PS2 Network] loadServerList finished. Server count: %d\n", (int)serverList.size());
 }
 
 void GuiMultiplayer::saveServerList()
@@ -223,8 +224,10 @@ void GuiMultiplayer::initGuiControls()
                                         translate->translateKey("gui.cancel")));
 #ifdef PS2_PLATFORM
     Ps2Network::initialize();
-#endif
     controlList.push_back(new GuiButton(500, width - 96, 6, 90, 20, "Test Network"));
+#endif
+    if (selectedServer < 0 && !serverList.empty())
+        selectedServer = 0;
 
     const bool valid = selectedServer >= 0 && selectedServer < (int_t)serverList.size();
     buttonSelect->enabled = valid;
