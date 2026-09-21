@@ -18,15 +18,11 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <cctype>
 
 #include "ps2/network/Ps2Network.h"
 #include "platform/Log.h"
-
-extern "C"
-{
-#undef lwip_ioctl
-int lwip_ioctl(int s, long cmd, void *argp);
-}
 
 namespace JavaNetwork
 {
@@ -59,13 +55,34 @@ public:
 		target.sin_port = htons(static_cast<unsigned short>(port));
 
 		std::string resolvedHost = host;
-		if (resolvedHost == "localhost" || resolvedHost == "127.0.0.1" ||
-		    resolvedHost == "1" || resolvedHost == "11" || resolvedHost == "0" ||
-		    resolvedHost.empty())
+		while (!resolvedHost.empty() && (resolvedHost.front() == ' ' || resolvedHost.front() == '\t'))
+			resolvedHost.erase(resolvedHost.begin());
+		while (!resolvedHost.empty() && (resolvedHost.back() == ' ' || resolvedHost.back() == '\t'))
+			resolvedHost.pop_back();
+
+		if (resolvedHost == "localhost" || resolvedHost == "127.0.0.1" || resolvedHost.empty())
 		{
 			MC_LOG_INFO("network", "[PS2] Remapping '%s' to host PC IP (192.168.0.52)\n", host.c_str());
 			printf("[PS2 Network] Remapping '%s' to host PC IP (192.168.0.52)\n", host.c_str());
 			resolvedHost = "192.168.0.52";
+		}
+
+		// Detect if input is only digits and dots
+		bool isDigitsAndDots = true;
+		int dotCount = 0;
+		for (char c : resolvedHost)
+		{
+			if (c == '.')
+				dotCount++;
+			else if (!std::isdigit(static_cast<unsigned char>(c)))
+				isDigitsAndDots = false;
+		}
+
+		// If it's only digits without 3 dots (e.g. "3487", "1", "11"), reject immediately!
+		if (isDigitsAndDots && dotCount != 3)
+		{
+			printf("[PS2 Network] Malformed IP '%s' (needs 4 octets X.X.X.X)\n", resolvedHost.c_str());
+			return false;
 		}
 
 		unsigned long ip = inet_addr(resolvedHost.c_str());
@@ -75,10 +92,12 @@ public:
 		}
 		else
 		{
+			printf("[PS2 Network] Resolving hostname '%s' via DNS...\n", resolvedHost.c_str());
 			hostent *resolved = gethostbyname(resolvedHost.c_str());
 			if (resolved == nullptr || resolved->h_addr_list == nullptr || resolved->h_addr_list[0] == nullptr)
 			{
-				MC_LOG_WARN("network", "[PS2] Could not resolve host: %s\n", host.c_str());
+				MC_LOG_WARN("network", "[PS2] Could not resolve host: %s\n", resolvedHost.c_str());
+				printf("[PS2 Network] Could not resolve host: %s\n", resolvedHost.c_str());
 				return false;
 			}
 			std::memcpy(&target.sin_addr, resolved->h_addr_list[0], sizeof(target.sin_addr));
@@ -98,26 +117,36 @@ public:
 		int nodelay = 1;
 		::setsockopt(socketFd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
-		// Set non-blocking mode with REAL lwip_ioctl
-		int nb = 1;
-		lwip_ioctl(socketFd, FIONBIO, &nb);
+		// Set non-blocking mode via libcglue fcntl
+		int origFlags = fcntl(socketFd, F_GETFL, 0);
+		fcntl(socketFd, F_SETFL, (origFlags >= 0 ? origFlags : 0) | O_NONBLOCK);
 
 		int connRes = ::connect(socketFd, reinterpret_cast<sockaddr *>(&target), sizeof(target));
 		if (connRes < 0)
 		{
-			// Wait for connection to complete or timeout
+			if (errno != EINPROGRESS && errno != EALREADY && errno != EWOULDBLOCK)
+			{
+				printf("[PS2 Network] connect() failed immediately: res=%d, errno=%d\n", connRes, errno);
+				close();
+				return false;
+			}
+
+			// Wait for connection with a 5-second timeout
 			fd_set writeSet;
+			fd_set exceptSet;
 			FD_ZERO(&writeSet);
+			FD_ZERO(&exceptSet);
 			FD_SET(socketFd, &writeSet);
+			FD_SET(socketFd, &exceptSet);
 			struct timeval tv{};
-			tv.tv_sec = 6;
+			tv.tv_sec = 5;
 			tv.tv_usec = 0;
 
-			printf("[PS2 Network] Waiting for TCP connect to %s (up to 6s)...\n", resolvedHost.c_str());
-			int sel = ::select(socketFd + 1, nullptr, &writeSet, nullptr, &tv);
+			printf("[PS2 Network] Waiting for TCP connect to %s (up to 5s)...\n", resolvedHost.c_str());
+			int sel = ::select(socketFd + 1, nullptr, &writeSet, &exceptSet, &tv);
 			if (sel <= 0)
 			{
-				printf("[PS2 Network] connect() timed out (select=%d)\n", sel);
+				printf("[PS2 Network] connect() timed out (select=%d, errno=%d)\n", sel, errno);
 				close();
 				return false;
 			}
@@ -134,8 +163,7 @@ public:
 		}
 
 		// Switch back to blocking mode for read/write operations
-		nb = 0;
-		lwip_ioctl(socketFd, FIONBIO, &nb);
+		fcntl(socketFd, F_SETFL, (origFlags >= 0 ? origFlags : 0));
 
 		printf("[PS2 Network] Connected successfully to %s!\n", remoteAddress.c_str());
 		return true;

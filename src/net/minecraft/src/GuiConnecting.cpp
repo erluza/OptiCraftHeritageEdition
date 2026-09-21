@@ -18,6 +18,7 @@ GuiConnecting::GuiConnecting(Minecraft *minecraft, const std::string &host, int_
 	: clientHandler(nullptr)
 	, connectThread(nullptr)
 	, cancelled(false)
+	, ticksOpen(0)
 {
 	MC_LOG_INFO("network", "Connecting to %s, %d\n", host.c_str(), port);
 	minecraft->changeWorld1(nullptr);
@@ -43,6 +44,11 @@ GuiConnecting::~GuiConnecting()
 void GuiConnecting::updateScreen()
 {
 	ticksOpen++;
+	if (ticksOpen >= 30 && !controlList.empty() && controlList[0] != nullptr && !controlList[0]->enabled)
+	{
+		controlList[0]->enabled = true;
+	}
+
 #ifdef PS2_PLATFORM
 	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkWorker);
 	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkReader);
@@ -57,7 +63,7 @@ void GuiConnecting::updateScreen()
 	}
 
 	std::string connectionError;
-	if (!cancelled && connectThread != nullptr && connectThread->takeError(connectionError))
+	if (connectThread != nullptr && connectThread->takeError(connectionError))
 	{
 		printf("[PS2 Network] GuiConnecting caught connection error: %s\n", connectionError.c_str());
 		mc->displayGuiScreen(new GuiConnectFailed(
@@ -81,7 +87,9 @@ void GuiConnecting::initGui()
 {
 	StringTranslate *stringtranslate = StringTranslate::getInstance();
 	controlList.clear();
-	controlList.push_back(new GuiButton(0, width / 2 - 100, height / 4 + 120 + 12, stringtranslate->translateKey("gui.cancel")));
+	GuiButton *cancelBtn = new GuiButton(0, width / 2 - 100, height / 4 + 120 + 12, stringtranslate->translateKey("gui.cancel"));
+	cancelBtn->enabled = (ticksOpen >= 30);
+	controlList.push_back(cancelBtn);
 }
 
 void GuiConnecting::actionPerformed(GuiButton *guibutton)
@@ -89,7 +97,7 @@ void GuiConnecting::actionPerformed(GuiButton *guibutton)
 	if (guibutton->id == 0)
 	{
 		// Debounce: prevent accidental cancel if button was pressed during screen transition
-		if (ticksOpen < 15)
+		if (ticksOpen < 30)
 		{
 			printf("[PS2 Network] Cancel ignored (debounced, ticksOpen=%d)\n", (int)ticksOpen);
 			return;

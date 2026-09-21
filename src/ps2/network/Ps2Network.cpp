@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <kernel.h>
 #include <delaythread.h>
@@ -24,8 +25,6 @@ extern "C"
 {
 #include <netman.h>
 #include <ps2ip.h>
-#undef lwip_ioctl
-int lwip_ioctl(int s, long cmd, void *argp);
 }
 
 namespace Ps2Network
@@ -233,8 +232,8 @@ DiagnosticResult testConnection()
     const int lsock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (lsock >= 0)
     {
-        int nb = 1;
-        lwip_ioctl(lsock, FIONBIO, &nb);
+        int origFlags = fcntl(lsock, F_GETFL, 0);
+        fcntl(lsock, F_SETFL, (origFlags >= 0 ? origFlags : 0) | O_NONBLOCK);
         sockaddr_in ltarget{};
         ltarget.sin_len = sizeof(ltarget);
         ltarget.sin_family = AF_INET;
@@ -282,8 +281,8 @@ DiagnosticResult testConnection()
         const int sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (sock >= 0)
         {
-            int nb2 = 1;
-            lwip_ioctl(sock, FIONBIO, &nb2);
+            int origFlags2 = fcntl(sock, F_GETFL, 0);
+            fcntl(sock, F_SETFL, (origFlags2 >= 0 ? origFlags2 : 0) | O_NONBLOCK);
             sockaddr_in target{};
             target.sin_len = sizeof(target);
             target.sin_family = AF_INET;

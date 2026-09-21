@@ -103,12 +103,17 @@ void ThreadConnectToServer::run()
 	}
 	catch (std::exception &exception)
 	{
-		if (cancelled.load())
-			return;
 		printf("[PS2 Network] ThreadConnectToServer exception: %s\n", exception.what());
 		MC_LOG_ERROR("game", "%s\n", exception.what());
 		std::lock_guard<std::mutex> guard(resultLock);
 		resultError = exception.what();
+		errorPending = true;
+	}
+	catch (...)
+	{
+		printf("[PS2 Network] ThreadConnectToServer caught unknown exception!\n");
+		std::lock_guard<std::mutex> guard(resultLock);
+		resultError = "Unknown network error";
 		errorPending = true;
 	}
 }
