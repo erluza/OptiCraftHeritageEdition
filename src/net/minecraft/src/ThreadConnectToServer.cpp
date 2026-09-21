@@ -87,6 +87,7 @@ void ThreadConnectToServer::run()
 	try
 	{
 		NetClientHandler *handler = new NetClientHandler(mc, hostName, port);
+		printf("[PS2 Network] NetClientHandler created successfully!\n");
 		if (cancelled.load())
 		{
 			printf("[PS2 Network] Connection cancelled during connect\n");

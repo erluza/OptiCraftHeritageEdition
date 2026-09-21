@@ -215,10 +215,7 @@ public:
 
 	void close() override
 	{
-		closing.store(true, std::memory_order_release);
-		const int socketFd = fd.load(std::memory_order_acquire);
-		if (socketFd >= 0)
-			::shutdown(socketFd, SHUT_RDWR);
+		releaseSocket();
 	}
 
 	std::string getRemoteSocketAddress() const override
@@ -267,14 +264,14 @@ protected:
 	int_type underflow() override
 	{
 		if (gptr() < egptr())
-			return traits_type::to_int_type(*gptr());
+			return traits_type::to_int_type(static_cast<unsigned char>(*gptr()));
 
 		int count = socket.read(buffer, sizeof(buffer));
 		if (count <= 0)
 			return traits_type::eof();
 
 		setg(buffer, buffer, buffer + count);
-		return traits_type::to_int_type(*gptr());
+		return traits_type::to_int_type(static_cast<unsigned char>(*gptr()));
 	}
 
 private:

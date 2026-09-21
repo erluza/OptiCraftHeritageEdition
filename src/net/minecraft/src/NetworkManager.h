@@ -71,7 +71,7 @@ private:
 	void readThreadRun();
 	void writeThreadRun();
 	void sleepThread();
-#ifdef WII_PLATFORM
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
 	static void *wiiReadThreadEntry(void *argument);
 	static void *wiiWriteThreadEntry(void *argument);
 #endif
@@ -95,14 +95,13 @@ private:
 	std::deque<std::unique_ptr<Packet>> chunkDataPackets;
 	NetHandler *netHandler;
 	bool serverHandler;
-	std::thread readThread;
-	std::thread writeThread;
-#ifndef WII_PLATFORM
-	std::thread closeThread;
-#endif
-#ifdef WII_PLATFORM
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
 	PlatformThread wiiReadThread;
 	PlatformThread wiiWriteThread;
+#else
+	std::thread readThread;
+	std::thread writeThread;
+	std::thread closeThread;
 #endif
 	int_t timeSinceLastRead;
 	int_t sendQueueByteLength;

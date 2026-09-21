@@ -29,4 +29,5 @@ protected:
 	NetClientHandler *clientHandler;
 	ThreadConnectToServer *connectThread;
 	bool cancelled;
+	int_t ticksOpen{0};
 };

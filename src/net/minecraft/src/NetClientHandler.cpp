@@ -931,8 +931,11 @@ void NetClientHandler::handleHandshake(Packet2Handshake* packet)
 void NetClientHandler::disconnect()
 {
     disconnected = true;
-    netManager->wakeThreads();
-    netManager->networkShutdown("disconnect.closed", {});
+    if (netManager != nullptr)
+    {
+        netManager->wakeThreads();
+        netManager->networkShutdown("disconnect.closed", {});
+    }
 }
 
 void NetClientHandler::handleKeepAlive(Packet0KeepAlive* packet)

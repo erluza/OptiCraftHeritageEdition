@@ -48,18 +48,30 @@ NetworkManager::NetworkManager(const std::string &host, int_t port, const std::s
 	if (socketInputStream == nullptr || socketOutputStream == nullptr)
 		throw std::runtime_error("Could not create network streams");
 	socketOutputStream->exceptions(std::ios::badbit | std::ios::failbit);
-#ifdef WII_PLATFORM
-	if (!wiiReadThread.start(&NetworkManager::wiiReadThreadEntry, this, 32 * 1024, 64))
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
+	if (!wiiReadThread.start(&NetworkManager::wiiReadThreadEntry, this, 32 * 1024,
+#ifdef PS2_PLATFORM
+		Ps2ThreadPriority::kNetworkReader
+#else
+		64
+#endif
+	))
 	{
 		networkSocket->close();
-		throw std::runtime_error("Could not create Wii network read thread");
+		throw std::runtime_error("Could not create network read thread");
 	}
-	if (!wiiWriteThread.start(&NetworkManager::wiiWriteThreadEntry, this, 32 * 1024, 64))
+	if (!wiiWriteThread.start(&NetworkManager::wiiWriteThreadEntry, this, 32 * 1024,
+#ifdef PS2_PLATFORM
+		Ps2ThreadPriority::kNetworkWriter
+#else
+		64
+#endif
+	))
 	{
 		running = false;
 		networkSocket->close();
 		wiiReadThread.join();
-		throw std::runtime_error("Could not create Wii network write thread");
+		throw std::runtime_error("Could not create network write thread");
 	}
 #else
 	try
@@ -84,7 +96,7 @@ NetworkManager::NetworkManager(const std::string &host, int_t port, const std::s
 NetworkManager::~NetworkManager()
 {
 	networkShutdown("disconnect.closed", std::vector<std::string>());
-#ifdef WII_PLATFORM
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
 	if (wiiReadThread.joinable() && !wiiReadThread.isCurrent()) wiiReadThread.join();
 	if (wiiWriteThread.joinable() && !wiiWriteThread.isCurrent()) wiiWriteThread.join();
 #else
@@ -384,7 +396,7 @@ void NetworkManager::closeConnection()
 #endif
 }
 
-#ifdef WII_PLATFORM
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
 void *NetworkManager::wiiReadThreadEntry(void *argument)
 {
 	try { static_cast<NetworkManager *>(argument)->readThreadRun(); }
@@ -515,12 +527,22 @@ void NetworkManager::handleNetworkException(NetworkManager *networkmanager, std:
 
 std::thread *NetworkManager::getReadThread(NetworkManager *networkmanager)
 {
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
+	(void)networkmanager;
+	return nullptr;
+#else
 	return networkmanager != nullptr ? &networkmanager->readThread : nullptr;
+#endif
 }
 
 std::thread *NetworkManager::getWriteThread(NetworkManager *networkmanager)
 {
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
+	(void)networkmanager;
+	return nullptr;
+#else
 	return networkmanager != nullptr ? &networkmanager->writeThread : nullptr;
+#endif
 }
 
 std::ostream *NetworkManager::getSocketOutputStream(NetworkManager *networkmanager)

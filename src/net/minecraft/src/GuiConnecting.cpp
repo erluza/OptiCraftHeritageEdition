@@ -42,6 +42,7 @@ GuiConnecting::~GuiConnecting()
 
 void GuiConnecting::updateScreen()
 {
+	ticksOpen++;
 #ifdef PS2_PLATFORM
 	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkWorker);
 	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkReader);
@@ -49,11 +50,16 @@ void GuiConnecting::updateScreen()
 	RotateThreadReadyQueue(Ps2ThreadPriority::kMain);
 #endif
 	if (clientHandler == nullptr && connectThread != nullptr)
+	{
 		clientHandler = connectThread->takeHandler();
+		if (clientHandler != nullptr)
+			printf("[PS2 Network] GuiConnecting took clientHandler! Transitioned to Logging in/Authorizing!\n");
+	}
 
 	std::string connectionError;
 	if (!cancelled && connectThread != nullptr && connectThread->takeError(connectionError))
 	{
+		printf("[PS2 Network] GuiConnecting caught connection error: %s\n", connectionError.c_str());
 		mc->displayGuiScreen(new GuiConnectFailed(
 			"connect.failed", "disconnect.genericReason", connectionError));
 		return;
@@ -82,6 +88,14 @@ void GuiConnecting::actionPerformed(GuiButton *guibutton)
 {
 	if (guibutton->id == 0)
 	{
+		// Debounce: prevent accidental cancel if button was pressed during screen transition
+		if (ticksOpen < 15)
+		{
+			printf("[PS2 Network] Cancel ignored (debounced, ticksOpen=%d)\n", (int)ticksOpen);
+			return;
+		}
+
+		printf("[PS2 Network] User cancelled connection!\n");
 		cancelled = true;
 		if (connectThread != nullptr)
 			connectThread->cancel();
