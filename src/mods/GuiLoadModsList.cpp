@@ -147,6 +147,7 @@ void GuiLoadModsList::scanPacks()
 {
     availablePacks.clear();
     selectedIndex = -1;
+    debugLogs.clear();
 
     std::vector<std::string> scanDirs;
 
@@ -154,6 +155,7 @@ void GuiLoadModsList::scanPacks()
     {
 #ifdef PS2_PLATFORM
         std::string inst = Ps2Assets::installDir();
+        debugLogs.push_back("installDir: '" + inst + "'");
         if (!inst.empty())
         {
             scanDirs.push_back(PlatformStorage::join(inst, "mods"));
@@ -174,6 +176,7 @@ void GuiLoadModsList::scanPacks()
 #endif
         scanDirs.push_back("./mods");
         scanDirs.push_back("mods");
+        scanDirs.push_back(".");
     }
     else
     {
@@ -187,10 +190,9 @@ void GuiLoadModsList::scanPacks()
 
     for (const auto &dir : scanDirs)
     {
-        auto packs = OchPackReader::scanDirectory(dir);
+        auto packs = OchPackReader::scanDirectory(dir, &debugLogs);
         for (const auto &p : packs)
         {
-            // Avoid duplicate packages with same ID
             bool duplicate = false;
             for (const auto &existing : availablePacks)
             {
@@ -294,8 +296,18 @@ void GuiLoadModsList::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick
     else
     {
         drawDefaultBackground();
-        drawCenteredString(fontRenderer, emptyMessage1, width / 2, height / 2 - 14, 0xAAAAAA);
-        drawCenteredString(fontRenderer, emptyMessage2, width / 2, height / 2 + 2, 0x777777);
+        drawCenteredString(fontRenderer, emptyMessage1, width / 2, 45, 0xAAAAAA);
+        drawCenteredString(fontRenderer, emptyMessage2, width / 2, 58, 0x777777);
+
+        int_t logY = 74;
+        drawString(fontRenderer, std::string("\xc2\xa7") + "6[Diagnostics - Search Log]:", 15, logY, 0xFFAA00);
+        logY += 12;
+        int_t maxLines = 10;
+        for (size_t i = 0; i < debugLogs.size() && (int_t)i < maxLines; ++i)
+        {
+            drawString(fontRenderer, std::string("\xc2\xa7") + "7" + debugLogs[i], 15, logY, 0x888888);
+            logY += 10;
+        }
     }
 
     drawCenteredString(fontRenderer, screenTitle, width / 2, 10, 0xFFFFFF);

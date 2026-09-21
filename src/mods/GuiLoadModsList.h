@@ -42,6 +42,7 @@ private:
     std::string screenTitle;
     std::string emptyMessage1;
     std::string emptyMessage2;
+    std::vector<std::string> debugLogs;
 
     friend class GuiSlotLoadMods;
 };

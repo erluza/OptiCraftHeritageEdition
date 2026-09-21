@@ -53,38 +53,153 @@ static void parseModInfoString(const std::string &content, OchPackInfo &outInfo)
     }
 }
 
-namespace OchPackReader
+// In-memory stream buffer for minizip to avoid buggy IOP seek drivers
+struct MemZipBuffer
 {
-bool readInfo(const std::string &filePath, OchPackInfo &outInfo)
+    const unsigned char *buffer;
+    uLong size;
+    uLong pos;
+};
+
+static voidpf ZCALLBACK mem_open(voidpf opaque, const char *filename, int mode)
 {
-    outInfo.valid = false;
-    outInfo.filePath = filePath;
+    return opaque;
+}
 
-    size_t lastSep = filePath.find_last_of("/\\");
-    outInfo.fileName = (lastSep == std::string::npos) ? filePath : filePath.substr(lastSep + 1);
+static uLong ZCALLBACK mem_read(voidpf opaque, voidpf stream, void *buf, uLong size)
+{
+    MemZipBuffer *m = static_cast<MemZipBuffer *>(stream);
+    if (!m || m->pos >= m->size)
+        return 0;
+    uLong avail = m->size - m->pos;
+    uLong toRead = (size < avail) ? size : avail;
+    std::memcpy(buf, m->buffer + m->pos, toRead);
+    m->pos += toRead;
+    return toRead;
+}
 
-    unzFile uf = unzOpen(filePath.c_str());
-    if (!uf)
-        uf = unzOpen64(filePath.c_str());
+static long ZCALLBACK mem_tell(voidpf opaque, voidpf stream)
+{
+    MemZipBuffer *m = static_cast<MemZipBuffer *>(stream);
+    return m ? static_cast<long>(m->pos) : -1;
+}
 
-    // If still null, try adding slash after colon (e.g. host:mods/... -> host:/mods/...)
-    if (!uf)
+static long ZCALLBACK mem_seek(voidpf opaque, voidpf stream, uLong offset, int origin)
+{
+    MemZipBuffer *m = static_cast<MemZipBuffer *>(stream);
+    if (!m)
+        return -1;
+    switch (origin)
     {
-        size_t colon = filePath.find(':');
-        if (colon != std::string::npos && colon + 1 < filePath.size() && filePath[colon + 1] != '/')
-        {
-            std::string alt = filePath.substr(0, colon + 1) + "/" + filePath.substr(colon + 1);
-            uf = unzOpen(alt.c_str());
-            if (!uf)
-                uf = unzOpen64(alt.c_str());
-            if (uf)
-                outInfo.filePath = alt;
-        }
+    case ZLIB_FILEFUNC_SEEK_CUR:
+        m->pos += offset;
+        break;
+    case ZLIB_FILEFUNC_SEEK_END:
+        m->pos = m->size + offset;
+        break;
+    case ZLIB_FILEFUNC_SEEK_SET:
+        m->pos = offset;
+        break;
+    default:
+        return -1;
+    }
+    return 0;
+}
+
+static int ZCALLBACK mem_close(voidpf opaque, voidpf stream)
+{
+    return 0;
+}
+
+static int ZCALLBACK mem_error(voidpf opaque, voidpf stream)
+{
+    return 0;
+}
+
+static bool readFileBytes(const std::string &path, std::vector<unsigned char> &out, std::string *resolvedPath = nullptr)
+{
+    std::vector<std::string> candidates;
+    candidates.push_back(path);
+
+    // Backslash variant
+    std::string bs = path;
+    for (char &c : bs)
+        if (c == '/')
+            c = '\\';
+    if (bs != path)
+        candidates.push_back(bs);
+
+    // Slash after colon (host:mods -> host:/mods)
+    size_t colon = path.find(':');
+    if (colon != std::string::npos && colon + 1 < path.size() && path[colon + 1] != '/' && path[colon + 1] != '\\')
+    {
+        std::string withSlash = path.substr(0, colon + 1) + "/" + path.substr(colon + 1);
+        candidates.push_back(withSlash);
+
+        std::string withBs = path.substr(0, colon + 1) + "\\" + path.substr(colon + 1);
+        for (char &c : withBs)
+            if (c == '/')
+                c = '\\';
+        candidates.push_back(withBs);
     }
 
+    for (const auto &candidate : candidates)
+    {
+        FILE *f = std::fopen(candidate.c_str(), "rb");
+        if (f)
+        {
+            std::fseek(f, 0, SEEK_END);
+            long sz = std::ftell(f);
+            std::fseek(f, 0, SEEK_SET);
+            if (sz > 0)
+            {
+                out.resize(static_cast<size_t>(sz));
+                size_t readCount = std::fread(out.data(), 1, static_cast<size_t>(sz), f);
+                std::fclose(f);
+                if (readCount == static_cast<size_t>(sz))
+                {
+                    if (resolvedPath)
+                        *resolvedPath = candidate;
+                    return true;
+                }
+            }
+            else
+            {
+                std::fclose(f);
+            }
+        }
+    }
+    return false;
+}
+
+namespace OchPackReader
+{
+bool readInfoFromBytes(const std::vector<unsigned char> &data, const std::string &originalPath, OchPackInfo &outInfo)
+{
+    outInfo.valid = false;
+    outInfo.filePath = originalPath;
+
+    size_t lastSep = originalPath.find_last_of("/\\");
+    outInfo.fileName = (lastSep == std::string::npos) ? originalPath : originalPath.substr(lastSep + 1);
+
+    if (data.size() < 22)
+        return false;
+
+    MemZipBuffer memBuf{ data.data(), static_cast<uLong>(data.size()), 0 };
+    zlib_filefunc_def filefunc;
+    filefunc.zopen_file = mem_open;
+    filefunc.zread_file = mem_read;
+    filefunc.zwrite_file = nullptr;
+    filefunc.ztell_file = mem_tell;
+    filefunc.zseek_file = mem_seek;
+    filefunc.zclose_file = mem_close;
+    filefunc.zerror_file = mem_error;
+    filefunc.opaque = &memBuf;
+
+    unzFile uf = unzOpen2("mem", &filefunc);
     if (!uf)
     {
-        MC_LOG_WARN("mods", "OchPackReader: Failed to open '%s'\n", filePath.c_str());
+        std::printf("[OptiCraftMods] Failed unzOpen2 for '%s'\n", originalPath.c_str());
         return false;
     }
 
@@ -94,7 +209,7 @@ bool readInfo(const std::string &filePath, OchPackInfo &outInfo)
 
     if (res != UNZ_OK)
     {
-        MC_LOG_WARN("mods", "OchPackReader: No mod.info or manifest.txt in '%s'\n", filePath.c_str());
+        std::printf("[OptiCraftMods] mod.info not found inside '%s'\n", originalPath.c_str());
         unzClose(uf);
         return false;
     }
@@ -138,27 +253,43 @@ bool readInfo(const std::string &filePath, OchPackInfo &outInfo)
         outInfo.version = "1.0";
 
     outInfo.valid = true;
+    std::printf("[OptiCraftMods] Loaded: id='%s' name='%s' ver='%s' (%s)\n",
+                outInfo.id.c_str(), outInfo.name.c_str(), outInfo.version.c_str(), originalPath.c_str());
     return true;
 }
 
-std::vector<OchPackInfo> scanDirectory(const std::string &dirPath)
+bool readInfo(const std::string &filePath, OchPackInfo &outInfo)
+{
+    std::vector<unsigned char> data;
+    std::string resolved;
+    if (!readFileBytes(filePath, data, &resolved))
+        return false;
+    return readInfoFromBytes(data, resolved, outInfo);
+}
+
+std::vector<OchPackInfo> scanDirectory(const std::string &dirPath, std::vector<std::string> *outDebugLogs)
 {
     std::vector<OchPackInfo> results;
     std::vector<std::string> candidateFiles;
 
+    if (outDebugLogs)
+        outDebugLogs->push_back("Scanning: " + dirPath);
+
     // 1. Try reading packlist.txt or mods.list in this directory
-    static const char* const LIST_NAMES[] = {
+    static const char *const LIST_NAMES[] = {
         "packlist.txt",
         "mods.list",
         "mods.txt"
     };
 
-    for (const char* listName : LIST_NAMES)
+    for (const char *listName : LIST_NAMES)
     {
         std::string listPath = PlatformStorage::join(dirPath, listName);
         std::vector<unsigned char> listData;
-        if (PlatformStorage::readFile(listPath, listData) && !listData.empty())
+        if (readFileBytes(listPath, listData) && !listData.empty())
         {
+            if (outDebugLogs)
+                outDebugLogs->push_back("Found " + std::string(listName) + " in " + dirPath);
             std::string listContent(listData.begin(), listData.end());
             std::istringstream stream(listContent);
             std::string line;
@@ -179,7 +310,7 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath)
     }
 
     // 2. Built-in candidate probe list for filesystems where opendir() is not supported (e.g. PCSX2 host:, CD-ROM)
-    static const char* const PROBE_NAMES[] = {
+    static const char *const PROBE_NAMES[] = {
         "TooManyItems.ochpack",
         "toomanyitems.ochpack",
         "ReiMinimap.ochpack",
@@ -196,10 +327,10 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath)
         "test.ochpack"
     };
 
-    for (const char* probeName : PROBE_NAMES)
+    for (const char *probeName : PROBE_NAMES)
     {
         bool alreadyCandidate = false;
-        for (const auto& c : candidateFiles)
+        for (const auto &c : candidateFiles)
         {
             if (c == probeName)
             {
@@ -224,7 +355,7 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath)
                 if (ext == ".ochpack")
                 {
                     bool alreadyCandidate = false;
-                    for (const auto& c : candidateFiles)
+                    for (const auto &c : candidateFiles)
                     {
                         if (c == entry)
                         {
@@ -243,10 +374,12 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath)
     for (const auto &fileName : candidateFiles)
     {
         std::string fullPath = PlatformStorage::join(dirPath, fileName);
-        if (PlatformStorage::fileReadable(fullPath))
+        std::vector<unsigned char> fileData;
+        std::string resolved;
+        if (readFileBytes(fullPath, fileData, &resolved))
         {
             OchPackInfo info;
-            if (readInfo(fullPath, info))
+            if (readInfoFromBytes(fileData, resolved, info))
             {
                 bool duplicate = false;
                 for (const auto &existing : results)
@@ -258,33 +391,10 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath)
                     }
                 }
                 if (!duplicate)
-                    results.push_back(info);
-            }
-        }
-        else
-        {
-            // Try alternative slash after colon (e.g. host:mods/file -> host:/mods/file)
-            size_t colon = fullPath.find(':');
-            if (colon != std::string::npos && colon + 1 < fullPath.size() && fullPath[colon + 1] != '/')
-            {
-                std::string alt = fullPath.substr(0, colon + 1) + "/" + fullPath.substr(colon + 1);
-                if (PlatformStorage::fileReadable(alt))
                 {
-                    OchPackInfo info;
-                    if (readInfo(alt, info))
-                    {
-                        bool duplicate = false;
-                        for (const auto &existing : results)
-                        {
-                            if (existing.id == info.id)
-                            {
-                                duplicate = true;
-                                break;
-                            }
-                        }
-                        if (!duplicate)
-                            results.push_back(info);
-                    }
+                    results.push_back(info);
+                    if (outDebugLogs)
+                        outDebugLogs->push_back("Found mod: " + info.name + " (" + info.version + ")");
                 }
             }
         }
