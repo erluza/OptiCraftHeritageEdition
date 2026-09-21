@@ -30,6 +30,8 @@ public:
     void initGuiControls();
     void joinServer(int_t index);
     void joinServer(const std::shared_ptr<ServerNBTStorage> &server);
+    bool allowsPlatformPointerInput() const override { return true; }
+    void startNetworkTest();
 
     const std::vector<std::shared_ptr<ServerNBTStorage>> &getServerList() const;
     int_t getSelectedServer() const;

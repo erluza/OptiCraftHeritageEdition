@@ -11,6 +11,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#elif defined(PS2_PLATFORM)
+#include <kernel.h>
 #endif
 #endif
 
@@ -54,6 +56,12 @@ bool PlatformThread::start(Entry entry, void* argument, std::size_t, int priorit
                 SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
             if (affinityMask != 0)
                 SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(affinityMask));
+#elif defined(PS2_PLATFORM)
+            // On PS2 Emotion Engine, threads have no preemption between equal priority threads.
+            // Main thread is set to kMain = 64. Background worker threads must sit at higher priority
+            // (lower number, e.g. 52) so they preempt the busy-waiting vsync/frame loop.
+            ChangeThreadPriority(GetThreadId(), (priority > 0 && priority < 64) ? priority : 52);
+            (void)affinityMask;
 #else
             (void)priority;
             (void)affinityMask;

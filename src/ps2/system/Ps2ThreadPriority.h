@@ -14,4 +14,10 @@ constexpr int kMusicStream = 32;
 // Background texture asset I/O. It must run above main so it can issue a USB
 // request while the frame loop is active, but below music streaming.
 constexpr int kAssetIo = 48;
+// Network threads. Must run above main (64) so TCP sockets, packet reading and writing
+// are never starved by the 60fps frame loop busy-waiting on vsync.
+constexpr int kNetworkReader = 50;
+constexpr int kNetworkWriter = 51;
+constexpr int kNetworkWorker = 52;
 }
+

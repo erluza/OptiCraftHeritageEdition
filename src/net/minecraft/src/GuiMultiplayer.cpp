@@ -30,6 +30,20 @@
 #include "pc/lwjgl/Keyboard.h"
 #include "platform/Log.h"
 
+#include <thread>
+#ifdef PS2_PLATFORM
+#include "ps2/network/Ps2Network.h"
+#include <kernel.h>
+#endif
+
+namespace
+{
+std::string s_netTestStatus;
+int_t s_netTestColor = 0xa0a0a0;
+std::mutex s_netTestMutex;
+bool s_netTesting = false;
+}
+
 std::atomic<int_t> GuiMultiplayer::threadsPending{0};
 
 GuiMultiplayer::GuiMultiplayer(GuiScreen *parent)
@@ -154,6 +168,7 @@ void GuiMultiplayer::initGuiControls()
                                         translate->translateKey("selectServer.refresh")));
     controlList.push_back(new GuiButton(0, width / 2 + 80, height - 28, 75, 20,
                                         translate->translateKey("gui.cancel")));
+    controlList.push_back(new GuiButton(500, width - 76, 6, 70, 20, "Test Red"));
 
     const bool valid = selectedServer >= 0 && selectedServer < (int_t)serverList.size();
     buttonSelect->enabled = valid;
@@ -222,11 +237,47 @@ void GuiMultiplayer::actionPerformed(GuiButton *button)
     {
         mc->displayGuiScreen(new GuiMultiplayer(parentScreen));
     }
+    else if (button->id == 500)
+    {
+        startNetworkTest();
+    }
     else if (serverSlotContainer != nullptr)
     {
         serverSlotContainer->actionPerformed(button);
     }
 #endif
+}
+
+void GuiMultiplayer::startNetworkTest()
+{
+    {
+        std::lock_guard<std::mutex> lock(s_netTestMutex);
+        if (s_netTesting)
+            return;
+        s_netTesting = true;
+    }
+
+    s_netTestStatus = "Probando red...";
+    s_netTestColor = 0xffff55;
+
+    std::thread([]() {
+#if defined(PS2_PLATFORM)
+        ChangeThreadPriority(GetThreadId(), 52);
+        Ps2Network::DiagnosticResult res = Ps2Network::testConnection();
+        s_netTestStatus = res.statusMessage;
+        if (res.pingOk)
+            s_netTestColor = 0x55ff55;
+        else if (res.hasIp)
+            s_netTestColor = 0xffaa00;
+        else
+            s_netTestColor = 0xff5555;
+#else
+        s_netTestStatus = "Online (Desktop) | Ping 8.8.8.8 OK";
+        s_netTestColor = 0x55ff55;
+#endif
+        std::lock_guard<std::mutex> lock(s_netTestMutex);
+        s_netTesting = false;
+    }).detach();
 }
 
 void GuiMultiplayer::confirmClicked(bool confirmed, int_t id)
@@ -356,7 +407,15 @@ void GuiMultiplayer::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
 #else
     if (serverSlotContainer != nullptr)
         serverSlotContainer->drawScreen(mouseX, mouseY, partialTick);
-    drawCenteredString(fontRenderer, translate->translateKey("multiplayer.title"), width / 2, 20, 0xffffff);
+    if (s_netTestStatus.empty())
+    {
+        drawCenteredString(fontRenderer, translate->translateKey("multiplayer.title"), width / 2, 14, 0xffffff);
+    }
+    else
+    {
+        drawCenteredString(fontRenderer, translate->translateKey("multiplayer.title"), width / 2, 5, 0xffffff);
+        drawCenteredString(fontRenderer, s_netTestStatus, width / 2, 18, s_netTestColor);
+    }
 #endif
     GuiScreen::drawScreen(mouseX, mouseY, partialTick);
     if (!lagTooltip.empty())

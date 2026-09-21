@@ -7,6 +7,8 @@
 
 #ifdef WII_PLATFORM
 #include <unistd.h>
+#elif defined(PS2_PLATFORM)
+#include <kernel.h>
 #endif
 
 #include "NetHandler.h"
@@ -398,6 +400,9 @@ void *NetworkManager::wiiWriteThreadEntry(void *argument)
 
 void NetworkManager::readThreadRun()
 {
+#ifdef PS2_PLATFORM
+	ChangeThreadPriority(GetThreadId(), 50);
+#endif
 	numReadThreads++;
 	try
 	{
@@ -419,6 +424,9 @@ void NetworkManager::readThreadRun()
 
 void NetworkManager::writeThreadRun()
 {
+#ifdef PS2_PLATFORM
+	ChangeThreadPriority(GetThreadId(), 51);
+#endif
 	numWriteThreads++;
 	try
 	{

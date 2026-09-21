@@ -9,6 +9,9 @@
 #include "FontRenderer.h"
 #include "Minecraft.h"
 #include <iostream>
+#ifdef PS2_PLATFORM
+#include <kernel.h>
+#endif
 
 GuiConnecting::GuiConnecting(Minecraft *minecraft, const std::string &host, int_t port)
 	: clientHandler(nullptr)
@@ -38,6 +41,9 @@ GuiConnecting::~GuiConnecting()
 
 void GuiConnecting::updateScreen()
 {
+#ifdef PS2_PLATFORM
+	RotateThreadReadyQueue(64);
+#endif
 	if (clientHandler == nullptr && connectThread != nullptr)
 		clientHandler = connectThread->takeHandler();
 

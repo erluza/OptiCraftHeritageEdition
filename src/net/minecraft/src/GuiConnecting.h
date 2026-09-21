@@ -20,6 +20,7 @@ public:
 	static void setNetClientHandler(GuiConnecting *guiconnecting, NetClientHandler *netclienthandler);
 	static NetClientHandler *getNetClientHandler(GuiConnecting *guiconnecting);
 	static bool isCancelled(GuiConnecting *guiconnecting);
+	bool allowsPlatformPointerInput() const override { return true; }
 
 protected:
 	void keyTyped(char_t c, int_t key) override;

@@ -1,4 +1,4 @@
-﻿#include "ThreadConnectToServer.h"
+#include "ThreadConnectToServer.h"
 
 #include "platform/Log.h"
 #include <exception>
@@ -11,6 +11,9 @@
 #include "Packet2Handshake.h"
 #include "Session.h"
 #include "java/String.h"
+#ifdef PS2_PLATFORM
+#include <kernel.h>
+#endif
 
 ThreadConnectToServer::ThreadConnectToServer(GuiConnecting *guiconnecting, Minecraft *minecraft, const std::string &s, int_t i)
 	: mc(minecraft)
@@ -71,6 +74,9 @@ void *ThreadConnectToServer::wiiThreadEntry(void *argument)
 
 void ThreadConnectToServer::run()
 {
+#ifdef PS2_PLATFORM
+	ChangeThreadPriority(GetThreadId(), 52);
+#endif
 	try
 	{
 		NetClientHandler *handler = new NetClientHandler(mc, hostName, port);

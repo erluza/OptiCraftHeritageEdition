@@ -56,6 +56,7 @@ option(PS2_ENABLE_PSMT8 "Store game textures as 8-bit palettized PSMT8 + CT16 CL
 option(PS2_RENDER_STATS "Enable verbose PS2 render statistics counters" OFF)
 option(PS2_REMOTE_DEBUG "Enable hardware remote debugging through ps2link/ps2client" OFF)
 option(PS2_ENABLE_SOUND "Enable PS2 audsrv ADPCM sound backend" ON)
+option(PS2_ENABLE_NETWORK "Enable PS2 TCP/IP multiplayer networking via ps2ip" ON)
 
 if(PS2_REMOTE_DEBUG AND CMAKE_BUILD_TYPE STREQUAL "Release")
     message(FATAL_ERROR "PS2_REMOTE_DEBUG requires a symbol-preserving build type; use the ps2-remote-debug preset")
@@ -85,6 +86,14 @@ set_source_files_properties(${PS2_MINIZIP_SOURCES}
 mcbeta_exclude_remote_stats_sources(PS2_SOURCES)
 
 mcbeta_select_platform_backends(PS2_SOURCES PS2 GS_PS2 PS2)
+
+# JavaNetwork.cpp is the desktop SDL_net / dummy fallback backend. The PS2
+# TCP/IP implementation lives in src/ps2/network when networking is enabled.
+if(PS2_ENABLE_NETWORK)
+    mcbeta_exclude_sources(PS2_SOURCES "[/\\]java[/\\]JavaNetwork\\.cpp$")
+else()
+    mcbeta_exclude_sources(PS2_SOURCES "[/\\]ps2[/\\]network[/\\](JavaNetwork_ps2|Ps2Network)\\.cpp$")
+endif()
 
 # VU microprograms use the same dvp-as tool. Keep discovery shared so enabling
 # either backend does not duplicate toolchain probing. Both paths retain CPU/VU0
@@ -299,7 +308,7 @@ target_compile_definitions(OptiCraft PRIVATE
     "_EE"
     "PS2_PLATFORM"
     "NO_EGL"
-    "NO_NETWORK"
+    $<$<NOT:$<BOOL:${PS2_ENABLE_NETWORK}>>:NO_NETWORK>
     $<$<BOOL:${PS2_NTSC_MODE}>:PS2_NTSC_MODE>
     $<$<BOOL:${PS2_VU1_TERRAIN_ACTIVE}>:PS2_ENABLE_VU1_TERRAIN>
     $<$<BOOL:${PS2_VU0_MESH_FINALIZE_ACTIVE}>:PS2_ENABLE_VU0_MESH_FINALIZE>
@@ -348,6 +357,7 @@ target_link_libraries(OptiCraft
     gskit dmakit dma graph
     patches pad mc vux
     $<$<BOOL:${PS2_ENABLE_SOUND}>:audsrv>
+    $<$<BOOL:${PS2_ENABLE_NETWORK}>:netman ps2ip>
     z
     kernel c
 )
@@ -494,3 +504,20 @@ if(PS2_ENABLE_SOUND)
         message(WARNING "PS2_ENABLE_SOUND is ON but audsrv.irx was not found: ${_AUDSRV_IRX}")
     endif()
 endif()
+
+if(PS2_ENABLE_NETWORK)
+    foreach(_NET_IRX ps2dev9.irx netman.irx smap.irx ps2ip.irx)
+        set(_NET_IRX_SRC "${PS2SDK}/iop/irx/${_NET_IRX}")
+        if(EXISTS "${_NET_IRX_SRC}")
+            add_custom_command(TARGET OptiCraft POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_NET_IRX_SRC}" "${PS2_APP_DIR}/data/irx/${_NET_IRX}"
+                COMMENT "Packaging ${PS2_APP_DIR}/data/irx/${_NET_IRX}"
+                VERBATIM
+            )
+        else()
+            message(WARNING "PS2_ENABLE_NETWORK is ON but ${_NET_IRX} was not found: ${_NET_IRX_SRC}")
+        endif()
+    endforeach()
+endif()
+

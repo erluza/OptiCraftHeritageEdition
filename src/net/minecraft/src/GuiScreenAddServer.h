@@ -16,6 +16,7 @@ public:
     void initGui() override;
     void onGuiClosed() override;
     void drawScreen(int_t mouseX, int_t mouseY, float_t partialTick) override;
+    bool allowsPlatformPointerInput() const override { return true; }
 
 protected:
     void actionPerformed(GuiButton *button) override;
