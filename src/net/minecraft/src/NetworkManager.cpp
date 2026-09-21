@@ -194,12 +194,24 @@ void NetworkManager::wakeThreads()
 bool NetworkManager::readPacket()
 {
 	#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
-	constexpr std::size_t MAX_READ_QUEUE_BYTES = 4 * 1024 * 1024;
-	constexpr std::size_t MAX_READ_QUEUE_PACKETS = 2048;
+	constexpr std::size_t MAX_READ_QUEUE_BYTES = 16 * 1024 * 1024;
+	constexpr std::size_t MAX_READ_QUEUE_PACKETS = 4096;
 	#else
 	constexpr std::size_t MAX_READ_QUEUE_BYTES = 32 * 1024 * 1024;
 	constexpr std::size_t MAX_READ_QUEUE_PACKETS = 8192;
 	#endif
+
+	// If the queue is full, pause reading from socket so TCP flow control naturally throttles
+	// the server, giving the main thread time to drain packets via processReadPackets().
+	{
+		std::lock_guard<std::mutex> guard(readQueueLock);
+		if (readPackets.size() >= MAX_READ_QUEUE_PACKETS ||
+		    readQueueByteLength >= MAX_READ_QUEUE_BYTES)
+		{
+			return false;
+		}
+	}
+
 	bool flag = false;
 	try
 	{
@@ -216,10 +228,6 @@ bool NetworkManager::readPacket()
 			field_28145_d[packet->getPacketId()] += packetBytesSigned;
 			NetworkTelemetry::getInstance().addReceivedPacket();
 			std::lock_guard<std::mutex> guard(readQueueLock);
-			if (readPackets.size() >= MAX_READ_QUEUE_PACKETS ||
-			    readQueueByteLength > MAX_READ_QUEUE_BYTES ||
-			    packetBytes > MAX_READ_QUEUE_BYTES - readQueueByteLength)
-				throw std::runtime_error("Incoming packet queue overflow");
 			readQueueByteLength += packetBytes;
 			readPackets.emplace_back(std::move(packet));
 			flag = true;
@@ -291,7 +299,7 @@ void NetworkManager::processReadPackets()
 		timeSinceLastRead = 0;
 	}
 
-	for (int_t i = 1000; i-- >= 0;)
+	for (int_t i = 2500; i-- >= 0;)
 	{
 		std::unique_ptr<Packet> packet;
 		{
