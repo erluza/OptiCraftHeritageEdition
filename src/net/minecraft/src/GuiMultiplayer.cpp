@@ -61,6 +61,9 @@ GuiMultiplayer::~GuiMultiplayer()
 
 void GuiMultiplayer::updateScreen()
 {
+    if (!PS2_ONLINE_MULTIPLAYER_ENABLED)
+        return;
+
     if (s_netTestPending)
     {
         s_netTestPending = false;
@@ -83,6 +86,15 @@ void GuiMultiplayer::updateScreen()
 
 void GuiMultiplayer::initGui()
 {
+    if (!PS2_ONLINE_MULTIPLAYER_ENABLED)
+    {
+        controlList.clear();
+        StringTranslate *translate = StringTranslate::getInstance();
+        controlList.push_back(new GuiButton(0, width / 2 - 100, height / 2 + 36,
+                                            translate->translateKey("gui.cancel")));
+        return;
+    }
+
 #ifdef NO_NETWORK
     controlList.clear();
     StringTranslate *translate = StringTranslate::getInstance();
@@ -201,6 +213,8 @@ void GuiMultiplayer::initGuiControls()
 
 void GuiMultiplayer::onGuiClosed()
 {
+    if (!PS2_ONLINE_MULTIPLAYER_ENABLED)
+        return;
 #ifndef NO_NETWORK
     lwjgl::Keyboard::enableRepeatEvents(false);
 #endif
@@ -210,6 +224,13 @@ void GuiMultiplayer::actionPerformed(GuiButton *button)
 {
     if (button == nullptr || !button->enabled)
         return;
+
+    if (!PS2_ONLINE_MULTIPLAYER_ENABLED)
+    {
+        if (button->id == 0 && mc != nullptr)
+            mc->displayGuiScreen(parentScreen);
+        return;
+    }
 
 #ifdef NO_NETWORK
     if (button->id == 0 && mc != nullptr)
@@ -383,8 +404,10 @@ void GuiMultiplayer::joinServer(const std::shared_ptr<ServerNBTStorage> &server)
 #endif
 }
 
-void GuiMultiplayer::keyTyped(char_t c, int_t)
+void GuiMultiplayer::keyTyped(char_t c, int_t key)
 {
+    if (!PS2_ONLINE_MULTIPLAYER_ENABLED)
+        return;
     if (c == '\r' && buttonSelect != nullptr)
         actionPerformed(buttonSelect);
 }
@@ -399,6 +422,16 @@ void GuiMultiplayer::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
     lagTooltip.clear();
     StringTranslate *translate = StringTranslate::getInstance();
     drawDefaultBackground();
+
+    if (!PS2_ONLINE_MULTIPLAYER_ENABLED)
+    {
+        drawCenteredString(fontRenderer, translate->translateKey("multiplayer.title"), width / 2, 20, 0xffffff);
+        drawCenteredString(fontRenderer, "Online multiplayer is not available on this platform.",
+                           width / 2, height / 2 - 10, 0xa0a0a0);
+        GuiScreen::drawScreen(mouseX, mouseY, partialTick);
+        return;
+    }
+
 #ifdef NO_NETWORK
     drawCenteredString(fontRenderer, translate->translateKey("multiplayer.title"), width / 2, 20, 0xffffff);
     drawCenteredString(fontRenderer, "Online multiplayer is not available on this platform.",

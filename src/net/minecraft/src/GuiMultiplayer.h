@@ -14,6 +14,15 @@ class Minecraft;
 class FontRenderer;
 class ServerNBTStorage;
 
+// ============================================================================
+// Feature Flag: PS2 Online Multiplayer Menu
+// Set to 'true' to enable the PS2 multiplayer server list, direct connect,
+// and network diagnostics.
+// Set to 'false' to display the original vanilla placeholder screen
+// ("Online multiplayer is not available on this platform.").
+// ============================================================================
+inline constexpr bool PS2_ONLINE_MULTIPLAYER_ENABLED = false;
+
 // net.minecraft.src.GuiMultiplayer
 class GuiMultiplayer : public GuiScreen
 {
@@ -30,7 +39,7 @@ public:
     void initGuiControls();
     void joinServer(int_t index);
     void joinServer(const std::shared_ptr<ServerNBTStorage> &server);
-    bool allowsPlatformPointerInput() const override { return true; }
+    bool allowsPlatformPointerInput() const override { return PS2_ONLINE_MULTIPLAYER_ENABLED; }
     void startNetworkTest();
 
     const std::vector<std::shared_ptr<ServerNBTStorage>> &getServerList() const;
