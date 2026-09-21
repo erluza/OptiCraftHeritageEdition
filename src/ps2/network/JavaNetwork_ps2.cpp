@@ -23,6 +23,7 @@
 
 #include "ps2/network/Ps2Network.h"
 #include "platform/Log.h"
+#include "NetworkTelemetry.h"
 
 namespace JavaNetwork
 {
@@ -45,8 +46,15 @@ public:
 		sentBytes.store(0, std::memory_order_release);
 		remoteAddress = host + ":" + std::to_string(port);
 
+		NetworkTelemetry &telemetry = NetworkTelemetry::getInstance();
+		telemetry.setTarget(host, port);
+		telemetry.setStage(ConnectStage::VALIDATING_ADDRESS, "Checking host format & resolving");
+
 		if (port < 1 || port > 65535 || !Ps2Network::initialize())
+		{
+			telemetry.setError("Port out of range or Ps2Network::initialize failed");
 			return false;
+		}
 
 		sockaddr_in target;
 		std::memset(&target, 0, sizeof(target));
@@ -62,8 +70,7 @@ public:
 
 		if (resolvedHost == "localhost" || resolvedHost == "127.0.0.1" || resolvedHost.empty())
 		{
-			MC_LOG_INFO("network", "[PS2] Remapping '%s' to host PC IP (192.168.0.52)\n", host.c_str());
-			printf("[PS2 Network] Remapping '%s' to host PC IP (192.168.0.52)\n", host.c_str());
+			telemetry.logEvent("Remapping '%s' to host PC IP (192.168.0.52)", host.c_str());
 			resolvedHost = "192.168.0.52";
 		}
 
@@ -81,7 +88,7 @@ public:
 		// If it's only digits without 3 dots (e.g. "3487", "1", "11"), reject immediately!
 		if (isDigitsAndDots && dotCount != 3)
 		{
-			printf("[PS2 Network] Malformed IP '%s' (needs 4 octets X.X.X.X)\n", resolvedHost.c_str());
+			telemetry.setError(std::string("Malformed IP '") + resolvedHost + "' (needs 4 octets X.X.X.X)");
 			return false;
 		}
 
@@ -92,24 +99,23 @@ public:
 		}
 		else
 		{
-			printf("[PS2 Network] Resolving hostname '%s' via DNS...\n", resolvedHost.c_str());
+			telemetry.logEvent("Resolving hostname '%s' via DNS...", resolvedHost.c_str());
 			hostent *resolved = gethostbyname(resolvedHost.c_str());
 			if (resolved == nullptr || resolved->h_addr_list == nullptr || resolved->h_addr_list[0] == nullptr)
 			{
-				MC_LOG_WARN("network", "[PS2] Could not resolve host: %s\n", resolvedHost.c_str());
-				printf("[PS2 Network] Could not resolve host: %s\n", resolvedHost.c_str());
+				telemetry.setError(std::string("Could not resolve DNS: ") + resolvedHost);
 				return false;
 			}
 			std::memcpy(&target.sin_addr, resolved->h_addr_list[0], sizeof(target.sin_addr));
 		}
 
-		printf("[PS2 Network] Connecting socket to %s (ip: %s, port: %d)...\n",
-		       remoteAddress.c_str(), resolvedHost.c_str(), port);
-
+		telemetry.setStage(ConnectStage::CREATING_SOCKET, "Calling socket(AF_INET, SOCK_STREAM, 0)");
 		const int socketFd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		telemetry.setSocketFd(socketFd);
 		if (socketFd < 0)
 		{
-			printf("[PS2 Network] socket() failed: %d\n", socketFd);
+			telemetry.setLastErrno(errno);
+			telemetry.setError(std::string("socket() failed: ") + std::to_string(socketFd));
 			return false;
 		}
 		fd.store(socketFd, std::memory_order_release);
@@ -121,32 +127,32 @@ public:
 		int origFlags = fcntl(socketFd, F_GETFL, 0);
 		fcntl(socketFd, F_SETFL, (origFlags >= 0 ? origFlags : 0) | O_NONBLOCK);
 
+		telemetry.setStage(ConnectStage::TCP_CONNECTING, "Connecting TCP (5s timeout via select)");
 		int connRes = ::connect(socketFd, reinterpret_cast<sockaddr *>(&target), sizeof(target));
+		telemetry.setLastErrno(errno);
 		if (connRes < 0)
 		{
 			if (errno != EINPROGRESS && errno != EALREADY && errno != EWOULDBLOCK)
 			{
-				printf("[PS2 Network] connect() failed immediately: res=%d, errno=%d\n", connRes, errno);
+				telemetry.setError(std::string("connect() failed immediately: errno=") + std::to_string(errno));
 				close();
 				return false;
 			}
 
 			// Wait for connection with a 5-second timeout
 			fd_set writeSet;
-			fd_set exceptSet;
 			FD_ZERO(&writeSet);
-			FD_ZERO(&exceptSet);
 			FD_SET(socketFd, &writeSet);
-			FD_SET(socketFd, &exceptSet);
 			struct timeval tv{};
 			tv.tv_sec = 5;
 			tv.tv_usec = 0;
 
-			printf("[PS2 Network] Waiting for TCP connect to %s (up to 5s)...\n", resolvedHost.c_str());
-			int sel = ::select(socketFd + 1, nullptr, &writeSet, &exceptSet, &tv);
+			int sel = ::select(socketFd + 1, nullptr, &writeSet, nullptr, &tv);
+			telemetry.setSelectResult(sel);
+			telemetry.setLastErrno(errno);
 			if (sel <= 0)
 			{
-				printf("[PS2 Network] connect() timed out (select=%d, errno=%d)\n", sel, errno);
+				telemetry.setError(sel == 0 ? "TCP connect timed out (5s)" : (std::string("select() error: errno=") + std::to_string(errno)));
 				close();
 				return false;
 			}
@@ -156,7 +162,8 @@ public:
 			socklen_t errLen = sizeof(sockErr);
 			if (::getsockopt(socketFd, SOL_SOCKET, SO_ERROR, &sockErr, &errLen) != 0 || sockErr != 0)
 			{
-				printf("[PS2 Network] connect() failed: SO_ERROR=%d\n", sockErr);
+				telemetry.setSoError(sockErr);
+				telemetry.setError(std::string("connect() refused: SO_ERROR=") + std::to_string(sockErr));
 				close();
 				return false;
 			}
@@ -165,7 +172,7 @@ public:
 		// Switch back to blocking mode for read/write operations
 		fcntl(socketFd, F_SETFL, (origFlags >= 0 ? origFlags : 0));
 
-		printf("[PS2 Network] Connected successfully to %s!\n", remoteAddress.c_str());
+		telemetry.setStage(ConnectStage::INITIALIZING_STREAMS, "TCP connected, initializing streams");
 		return true;
 	}
 
@@ -182,18 +189,20 @@ public:
 			if (count > 0)
 			{
 				receivedBytes.fetch_add(static_cast<std::size_t>(count), std::memory_order_relaxed);
+				NetworkTelemetry::getInstance().addReceivedBytes(static_cast<std::size_t>(count));
 				return count;
 			}
 			if (count == 0)
 			{
-				printf("[PS2 Network] recv returned 0: connection closed by server\n");
+				NetworkTelemetry::getInstance().logEvent("recv returned 0: server closed connection");
 				return 0;
 			}
 			if (errno == EINTR)
 			{
 				continue;
 			}
-			printf("[PS2 Network] recv() error: errno=%d\n", errno);
+			NetworkTelemetry::getInstance().setLastErrno(errno);
+			NetworkTelemetry::getInstance().logEvent("recv() error: errno=%d", errno);
 			return -1;
 		}
 		return -1;
@@ -215,6 +224,7 @@ public:
 			if (count > 0)
 			{
 				sentBytes.fetch_add(static_cast<std::size_t>(count), std::memory_order_relaxed);
+				NetworkTelemetry::getInstance().addSentBytes(static_cast<std::size_t>(count));
 				offset += count;
 				continue;
 			}
@@ -222,7 +232,8 @@ public:
 			{
 				continue;
 			}
-			printf("[PS2 Network] send() error: errno=%d\n", errno);
+			NetworkTelemetry::getInstance().setLastErrno(errno);
+			NetworkTelemetry::getInstance().logEvent("send() error: errno=%d", errno);
 			return false;
 		}
 		return true;

@@ -1,5 +1,6 @@
 #include "platform/Log.h"
 #include "NetClientHandler.h"
+#include "NetworkTelemetry.h"
 #include "java/Arithmetic.h"
 #include <algorithm>
 #include <iostream>
@@ -183,6 +184,7 @@ void NetClientHandler::processReadPackets()
 
 void NetClientHandler::handleLogin(Packet1Login* packet)
 {
+    NetworkTelemetry::getInstance().setStage(ConnectStage::CONNECTED, "Packet1Login received! Entering game");
     delete mc->playerController;
     mc->playerController = new PlayerControllerMP(mc, this);
     playerControllerOwnsHandler = true;
@@ -891,6 +893,7 @@ void NetClientHandler::handleHandshake(Packet2Handshake* packet)
 
     if (packet->username == "-")
     {
+        NetworkTelemetry::getInstance().setStage(ConnectStage::LOGGING_IN, "Server handshake accepted (-), sending Packet1Login");
         addToSendQueue(new Packet1Login(mc->session->username, 29));
         return;
     }

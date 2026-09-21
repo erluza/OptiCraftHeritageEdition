@@ -15,6 +15,7 @@
 
 #include "NetHandler.h"
 #include "Packet.h"
+#include "NetworkTelemetry.h"
 #include "java/JavaNetwork.h"
 #include "java/Arithmetic.h"
 #include "java/System.h"
@@ -90,6 +91,9 @@ NetworkManager::NetworkManager(const std::string &host, int_t port, const std::s
 		throw;
 	}
 #endif
+	NetworkTelemetry::getInstance().setReaderThreadState(1);
+	NetworkTelemetry::getInstance().setWriterThreadState(1);
+	NetworkTelemetry::getInstance().logEvent("NetworkManager reader/writer threads started");
 	(void)s;
 }
 
@@ -148,6 +152,7 @@ bool NetworkManager::sendPacket()
 			if (!socketOutputStream->good())
 				throw std::runtime_error("Failed to write network packet");
 			field_28144_e[packet->getPacketId()] += packet->getPacketSize() + 1;
+			NetworkTelemetry::getInstance().addSentPacket();
 			flag = true;
 		}
 
@@ -167,6 +172,7 @@ bool NetworkManager::sendPacket()
 			if (!socketOutputStream->good())
 				throw std::runtime_error("Failed to write chunk packet");
 			field_28144_e[packet1->getPacketId()] += packet1->getPacketSize() + 1;
+			NetworkTelemetry::getInstance().addSentPacket();
 			field_20100_w = 0;
 			flag = true;
 		}
@@ -208,6 +214,7 @@ bool NetworkManager::readPacket()
 				throw std::runtime_error("Invalid incoming packet size");
 			const std::size_t packetBytes = static_cast<std::size_t>(packetBytesSigned);
 			field_28145_d[packet->getPacketId()] += packetBytesSigned;
+			NetworkTelemetry::getInstance().addReceivedPacket();
 			std::lock_guard<std::mutex> guard(readQueueLock);
 			if (readPackets.size() >= MAX_READ_QUEUE_PACKETS ||
 			    readQueueByteLength > MAX_READ_QUEUE_BYTES ||
@@ -233,6 +240,7 @@ bool NetworkManager::readPacket()
 
 void NetworkManager::onNetworkError(std::exception &exception)
 {
+	NetworkTelemetry::getInstance().setError(exception.what());
 	MC_LOG_ERROR("game", "%s\n", exception.what());
 	networkShutdown("disconnect.genericReason", std::vector<std::string>{std::string("Internal exception: ") + exception.what()});
 }

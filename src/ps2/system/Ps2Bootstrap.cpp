@@ -36,6 +36,8 @@ bool initialize(int argc, char** argv)
     ChangeThreadPriority(GetThreadId(), Ps2ThreadPriority::kMain);
 
     Ps2LibcLocks::initialize();
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+    std::setvbuf(stderr, nullptr, _IONBF, 0);
     // Before anything that can throw. Until this is installed an escaped
     // exception aborts silently, which on this console is indistinguishable
     // from a freeze.

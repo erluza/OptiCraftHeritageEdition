@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "NetworkTelemetry.h"
 #include "GuiConnecting.h"
 #include "Minecraft.h"
 #include "NetClientHandler.h"
@@ -83,27 +84,34 @@ void ThreadConnectToServer::run()
 #ifdef PS2_PLATFORM
 	ChangeThreadPriority(GetThreadId(), Ps2ThreadPriority::kNetworkWorker);
 #endif
-	printf("[PS2 Network] ThreadConnectToServer started for %s:%d\n", hostName.c_str(), port);
+	NetworkTelemetry &telemetry = NetworkTelemetry::getInstance();
+	telemetry.setWorkerThreadState(1);
+	telemetry.logEvent("ThreadConnectToServer worker started for %s:%d", hostName.c_str(), port);
 	try
 	{
 		NetClientHandler *handler = new NetClientHandler(mc, hostName, port);
-		printf("[PS2 Network] NetClientHandler created successfully!\n");
+		telemetry.logEvent("NetClientHandler created OK");
 		if (cancelled.load())
 		{
-			printf("[PS2 Network] Connection cancelled during connect\n");
+			telemetry.logEvent("Connection cancelled during connect");
 			handler->disconnect();
 			delete handler;
+			telemetry.setWorkerThreadState(2);
 			return;
 		}
-		printf("[PS2 Network] Connection established, sending handshake for %s...\n", mc->session->username.c_str());
+		telemetry.setStage(ConnectStage::SENDING_HANDSHAKE, "Sending Packet2Handshake");
 		handler->addToSendQueue(new Packet2Handshake(mc->session->username));
-		std::lock_guard<std::mutex> guard(resultLock);
-		resultHandler = handler;
-		printf("[PS2 Network] Handshake queued, resultHandler assigned!\n");
+		{
+			std::lock_guard<std::mutex> guard(resultLock);
+			resultHandler = handler;
+		}
+		telemetry.setWorkerThreadState(2);
+		telemetry.logEvent("Handshake queued, worker phase complete");
 	}
 	catch (std::exception &exception)
 	{
-		printf("[PS2 Network] ThreadConnectToServer exception: %s\n", exception.what());
+		telemetry.setWorkerThreadState(-1);
+		telemetry.setError(exception.what());
 		MC_LOG_ERROR("game", "%s\n", exception.what());
 		std::lock_guard<std::mutex> guard(resultLock);
 		resultError = exception.what();
@@ -111,7 +119,8 @@ void ThreadConnectToServer::run()
 	}
 	catch (...)
 	{
-		printf("[PS2 Network] ThreadConnectToServer caught unknown exception!\n");
+		telemetry.setWorkerThreadState(-1);
+		telemetry.setError("Unknown network error");
 		std::lock_guard<std::mutex> guard(resultLock);
 		resultError = "Unknown network error";
 		errorPending = true;
