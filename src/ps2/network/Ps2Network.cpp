@@ -90,18 +90,21 @@ bool initialize()
     // 3. Set Ethernet link mode to auto-negotiation
     applyLinkMode(NETMAN_NETIF_ETH_LINK_MODE_AUTO);
 
-    // 4. Initialize TCP/IP stack with dummy address as required by PS2SDK ps2ip
+    // 4. Initialize TCP/IP stack with valid LAN subnet address
+    printf("[PS2 Network] Initializing TCP/IP stack with 192.168.0.60 (gw: 192.168.0.1)...\n");
     struct ip4_addr ip{}, nm{}, gw{};
-    ip.addr = inet_addr("169.254.0.1");
-    nm.addr = inet_addr("255.255.0.0");
-    gw.addr = inet_addr("169.254.0.254");
+    ip.addr = inet_addr("192.168.0.60");
+    nm.addr = inet_addr("255.255.255.0");
+    gw.addr = inet_addr("192.168.0.1");
     res = ps2ipInit(&ip, &nm, &gw);
     if (res < 0)
     {
-        MC_LOG_ERROR("network", "[PS2] ps2ipInit failed (%d)\n", res);
+        printf("[PS2 Network] ps2ipInit failed (%d)\n", res);
         NetManDeinit();
         return false;
     }
+
+    s_ipAddress = "192.168.0.60";
 
     // 5. Request DHCP on "sm0" (SMAP Ethernet device)
     char ifName[4] = "sm0";
@@ -115,10 +118,10 @@ bool initialize()
 
     s_initialized = true;
 
-    // Quick non-blocking probe for link and existing IP lease
-    if (checkLinkState())
+    // Wait briefly for DHCP lease (up to 1.5s in 50ms slices)
+    for (int i = 0; i < 30; ++i)
     {
-        if (ps2ip_getconfig(ifName, &ipInfo) >= 0)
+        if (checkLinkState() && ps2ip_getconfig(ifName, &ipInfo) >= 0)
         {
             unsigned long rawIp = ipInfo.ipaddr.s_addr;
             if (rawIp != 0 && rawIp != inet_addr("169.254.0.1") &&
@@ -131,12 +134,15 @@ bool initialize()
                     static_cast<unsigned>((rawIp >> 16) & 0xFF),
                     static_cast<unsigned>((rawIp >> 24) & 0xFF));
                 s_ipAddress = buf;
+                printf("[PS2 Network] DHCP bound! IP: %s\n", s_ipAddress.c_str());
+                break;
             }
         }
+        usleep(50000);
     }
 
     s_ready = true;
-    MC_LOG_INFO("network", "[PS2] Network stack initialized\n");
+    printf("[PS2 Network] Network ready. Active IP: %s\n", s_ipAddress.c_str());
     return true;
 }
 

@@ -79,10 +79,13 @@ public:
 			std::memcpy(&target.sin_addr, resolved->h_addr_list[0], sizeof(target.sin_addr));
 		}
 
+		printf("[PS2 Network] Connecting socket to %s (ip: %s, port: %d)...\n",
+		       remoteAddress.c_str(), resolvedHost.c_str(), port);
+
 		const int socketFd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (socketFd < 0)
 		{
-			MC_LOG_ERROR("network", "[PS2] socket creation failed: %d\n", socketFd);
+			printf("[PS2 Network] socket() failed: %d\n", socketFd);
 			return false;
 		}
 		fd.store(socketFd, std::memory_order_release);
@@ -90,66 +93,15 @@ public:
 		int nodelay = 1;
 		::setsockopt(socketFd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
-		// Set non-blocking mode for bounded connection attempt with early-cancel support
-		int nonblocking = 1;
-		lwip_ioctl(socketFd, FIONBIO, &nonblocking);
-
 		int connRes = ::connect(socketFd, reinterpret_cast<sockaddr *>(&target), sizeof(target));
-		bool connected = (connRes == 0);
-
-		if (!connected)
+		if (connRes != 0)
 		{
-			// Poll in 100ms slices up to 4.0 seconds (40 iterations)
-			for (int slice = 0; slice < 40; ++slice)
-			{
-				if (closing.load(std::memory_order_acquire))
-				{
-					MC_LOG_INFO("network", "[PS2] connect to %s cancelled by user\n", remoteAddress.c_str());
-					close();
-					return false;
-				}
-
-				fd_set writeSet;
-				FD_ZERO(&writeSet);
-				FD_SET(socketFd, &writeSet);
-
-				struct timeval tv{};
-				tv.tv_sec = 0;
-				tv.tv_usec = 100000; // 100ms
-
-				int selRes = ::select(socketFd + 1, nullptr, &writeSet, nullptr, &tv);
-				if (selRes > 0)
-				{
-					int sockErr = 0;
-					socklen_t errLen = sizeof(sockErr);
-					if (::getsockopt(socketFd, SOL_SOCKET, SO_ERROR, &sockErr, &errLen) == 0 && sockErr == 0)
-					{
-						connected = true;
-						break;
-					}
-					else
-					{
-						MC_LOG_WARN("network", "[PS2] connect to %s failed (sockErr=%d)\n",
-						            remoteAddress.c_str(), sockErr);
-						close();
-						return false;
-					}
-				}
-			}
-		}
-
-		if (!connected)
-		{
-			MC_LOG_WARN("network", "[PS2] connect to %s timed out\n", remoteAddress.c_str());
+			printf("[PS2 Network] connect() failed: res=%d, errno=%d\n", connRes, errno);
 			close();
 			return false;
 		}
 
-		// Restore blocking mode
-		nonblocking = 0;
-		lwip_ioctl(socketFd, FIONBIO, &nonblocking);
-
-		MC_LOG_INFO("network", "[PS2] Connected to %s\n", remoteAddress.c_str());
+		printf("[PS2 Network] Connected successfully to %s!\n", remoteAddress.c_str());
 		return true;
 	}
 
@@ -170,12 +122,14 @@ public:
 			}
 			if (count == 0)
 			{
+				printf("[PS2 Network] recv returned 0: connection closed by server\n");
 				return 0;
 			}
 			if (errno == EINTR)
 			{
 				continue;
 			}
+			printf("[PS2 Network] recv() error: errno=%d\n", errno);
 			return -1;
 		}
 		return -1;
@@ -204,6 +158,7 @@ public:
 			{
 				continue;
 			}
+			printf("[PS2 Network] send() error: errno=%d\n", errno);
 			return false;
 		}
 		return true;

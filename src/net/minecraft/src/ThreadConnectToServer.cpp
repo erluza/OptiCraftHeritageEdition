@@ -83,23 +83,28 @@ void ThreadConnectToServer::run()
 #ifdef PS2_PLATFORM
 	ChangeThreadPriority(GetThreadId(), Ps2ThreadPriority::kNetworkWorker);
 #endif
+	printf("[PS2 Network] ThreadConnectToServer started for %s:%d\n", hostName.c_str(), port);
 	try
 	{
 		NetClientHandler *handler = new NetClientHandler(mc, hostName, port);
 		if (cancelled.load())
 		{
+			printf("[PS2 Network] Connection cancelled during connect\n");
 			handler->disconnect();
 			delete handler;
 			return;
 		}
+		printf("[PS2 Network] Connection established, sending handshake for %s...\n", mc->session->username.c_str());
 		handler->addToSendQueue(new Packet2Handshake(mc->session->username));
 		std::lock_guard<std::mutex> guard(resultLock);
 		resultHandler = handler;
+		printf("[PS2 Network] Handshake queued, resultHandler assigned!\n");
 	}
 	catch (std::exception &exception)
 	{
 		if (cancelled.load())
 			return;
+		printf("[PS2 Network] ThreadConnectToServer exception: %s\n", exception.what());
 		MC_LOG_ERROR("game", "%s\n", exception.what());
 		std::lock_guard<std::mutex> guard(resultLock);
 		resultError = exception.what();
