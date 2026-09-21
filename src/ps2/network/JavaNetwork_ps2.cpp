@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <cerrno>
 #include <istream>
 #include <memory>
 #include <ostream>
@@ -93,13 +94,53 @@ public:
 		int nodelay = 1;
 		::setsockopt(socketFd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
+		// Use non-blocking connect with a 10-second timeout.
+		// PS2 lwIP blocking connect has NO timeout, so an unreachable host
+		// would hang the connection thread forever.
+		int nb = 1;
+		lwip_ioctl(socketFd, FIONBIO, &nb);
+
 		int connRes = ::connect(socketFd, reinterpret_cast<sockaddr *>(&target), sizeof(target));
-		if (connRes != 0)
+		if (connRes < 0 && errno != EINPROGRESS)
 		{
-			printf("[PS2 Network] connect() failed: res=%d, errno=%d\n", connRes, errno);
+			printf("[PS2 Network] connect() failed immediately: res=%d, errno=%d\n", connRes, errno);
 			close();
 			return false;
 		}
+
+		if (connRes != 0)
+		{
+			// Wait for connection to complete or timeout
+			fd_set writeSet;
+			FD_ZERO(&writeSet);
+			FD_SET(socketFd, &writeSet);
+			struct timeval tv{};
+			tv.tv_sec = 10;
+			tv.tv_usec = 0;
+
+			printf("[PS2 Network] Waiting for connect (up to 10s)...\n");
+			int sel = ::select(socketFd + 1, nullptr, &writeSet, nullptr, &tv);
+			if (sel <= 0)
+			{
+				printf("[PS2 Network] connect() timed out (select=%d, errno=%d)\n", sel, errno);
+				close();
+				return false;
+			}
+
+			// Check if the connection succeeded
+			int sockErr = 0;
+			socklen_t errLen = sizeof(sockErr);
+			if (::getsockopt(socketFd, SOL_SOCKET, SO_ERROR, &sockErr, &errLen) != 0 || sockErr != 0)
+			{
+				printf("[PS2 Network] connect() failed: SO_ERROR=%d\n", sockErr);
+				close();
+				return false;
+			}
+		}
+
+		// Switch back to blocking mode for read/write operations
+		nb = 0;
+		lwip_ioctl(socketFd, FIONBIO, &nb);
 
 		printf("[PS2 Network] Connected successfully to %s!\n", remoteAddress.c_str());
 		return true;
@@ -260,16 +301,38 @@ public:
 	}
 
 protected:
+	std::streamsize xsputn(const char *data, std::streamsize length) override
+	{
+		std::streamsize written = 0;
+		while (written < length)
+		{
+			std::streamsize space = epptr() - pptr();
+			if (space == 0)
+			{
+				if (!flushBuffer())
+					return written;
+				space = epptr() - pptr();
+			}
+
+			const std::streamsize remaining = length - written;
+			const std::streamsize count = remaining < space ? remaining : space;
+			std::memcpy(pptr(), data + written, static_cast<std::size_t>(count));
+			pbump(static_cast<int>(count));
+			written += count;
+		}
+		return written;
+	}
+
 	int_type overflow(int_type ch) override
 	{
+		if (traits_type::eq_int_type(ch, traits_type::eof()))
+			return traits_type::not_eof(ch);
+
 		if (!flushBuffer())
 			return traits_type::eof();
 
-		if (!traits_type::eq_int_type(ch, traits_type::eof()))
-		{
-			*pptr() = traits_type::to_char_type(ch);
-			pbump(1);
-		}
+		*pptr() = traits_type::to_char_type(ch);
+		pbump(1);
 		return traits_type::not_eof(ch);
 	}
 
@@ -290,7 +353,7 @@ private:
 	}
 
 	Socket &socket;
-	char buffer[2048];
+	char buffer[5120];
 };
 
 class SocketInputStream final : public std::istream

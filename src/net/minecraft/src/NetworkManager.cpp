@@ -175,7 +175,7 @@ void NetworkManager::wakeThreads()
 
 bool NetworkManager::readPacket()
 {
-	#ifdef WII_PLATFORM
+	#if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
 	constexpr std::size_t MAX_READ_QUEUE_BYTES = 4 * 1024 * 1024;
 	constexpr std::size_t MAX_READ_QUEUE_PACKETS = 2048;
 	#else

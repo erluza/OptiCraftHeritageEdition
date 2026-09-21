@@ -143,11 +143,28 @@ void GuiMultiplayer::loadServerList()
         MC_LOG_WARN("network", "Unable to read servers.dat: %s\n", exception.what());
     }
 
+#ifdef PS2_PLATFORM
+    // Always ensure default servers are present in the list for PS2.
+    // The user may have saved a servers.dat with invalid addresses.
+    {
+        auto hasHost = [&](const std::string &host) -> bool {
+            for (const auto &s : serverList)
+                if (s && std::string(s->host) == host)
+                    return true;
+            return false;
+        };
+        if (!hasHost("192.168.0.52:25565"))
+            serverList.insert(serverList.begin(), std::make_shared<ServerNBTStorage>("Local PC Server", "192.168.0.52:25565"));
+        if (!hasHost("127.0.0.1:25565"))
+            serverList.insert(serverList.begin() + 1, std::make_shared<ServerNBTStorage>("Localhost (PC Auto-Bridge)", "127.0.0.1:25565"));
+    }
+#else
     if (serverList.empty())
     {
         serverList.push_back(std::make_shared<ServerNBTStorage>("Local PC Server", "192.168.0.52:25565"));
         serverList.push_back(std::make_shared<ServerNBTStorage>("Localhost (PC Auto-Bridge)", "127.0.0.1:25565"));
     }
+#endif
 }
 
 void GuiMultiplayer::saveServerList()
