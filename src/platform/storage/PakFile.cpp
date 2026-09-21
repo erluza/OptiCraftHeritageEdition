@@ -21,6 +21,29 @@ bool PakFile::open(const std::string &path)
 {
     close();
     fd_ = ::open(path.c_str(), O_RDONLY);
+    if (fd_ < 0)
+    {
+        // Try slash / backslash variants after device colon (e.g. host:assets.pak <-> host:/assets.pak)
+        const size_t colon = path.find(':');
+        if (colon != std::string::npos)
+        {
+            if (colon + 1 < path.size() && path[colon + 1] != '/' && path[colon + 1] != '\\')
+            {
+                std::string withSlash = path.substr(0, colon + 1) + "/" + path.substr(colon + 1);
+                fd_ = ::open(withSlash.c_str(), O_RDONLY);
+                if (fd_ < 0)
+                {
+                    std::string withBs = path.substr(0, colon + 1) + "\\" + path.substr(colon + 1);
+                    fd_ = ::open(withBs.c_str(), O_RDONLY);
+                }
+            }
+            else if (colon + 1 < path.size() && (path[colon + 1] == '/' || path[colon + 1] == '\\'))
+            {
+                std::string noSlash = path.substr(0, colon + 1) + path.substr(colon + 2);
+                fd_ = ::open(noSlash.c_str(), O_RDONLY);
+            }
+        }
+    }
     return fd_ >= 0;
 }
 

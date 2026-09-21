@@ -124,6 +124,11 @@ void addInstallCandidate(std::vector<Candidate>& candidates,
     addCandidate(candidates, PlatformStorage::join(root, "data"), source);
     if (source == Ps2AssetLocator::Source::Disc)
         addCandidate(candidates, PlatformStorage::join(root, "DATA"), source);
+    if (source == Ps2AssetLocator::Source::Host)
+    {
+        if (!root.empty() && root.back() == ':')
+            addCandidate(candidates, root + "/data", source);
+    }
 }
 
 Ps2AssetLocator::Source classifyPath(const std::string& path)
@@ -173,7 +178,13 @@ void addLaunchCandidates(int argc, char* argv[])
         const std::string executablePath = PlatformStorage::normalizeSlashes(argv[0]);
         if (hasDevicePrefix(executablePath))
         {
-            const std::string launchDirectory = PlatformStorage::parent(executablePath);
+            std::string launchDirectory = PlatformStorage::parent(executablePath);
+            if (launchDirectory.empty())
+            {
+                const std::size_t colon = executablePath.find(':');
+                if (colon != std::string::npos)
+                    launchDirectory = executablePath.substr(0, colon + 1);
+            }
             const Ps2AssetLocator::Source launchSource = classifyPath(executablePath);
             addInstallCandidate(state().preferred, launchDirectory, launchSource);
             if (launchSource == Ps2AssetLocator::Source::Disc)
@@ -206,7 +217,9 @@ void addMountedFallbacks()
     }
 #endif
     addInstallCandidate(state().fallbacks, "host:", Ps2AssetLocator::Source::Host);
+    addInstallCandidate(state().fallbacks, "host:/", Ps2AssetLocator::Source::Host);
     addInstallCandidate(state().fallbacks, std::string("host:") + INSTALL_FOLDER, Ps2AssetLocator::Source::Host);
+    addInstallCandidate(state().fallbacks, std::string("host:/") + INSTALL_FOLDER, Ps2AssetLocator::Source::Host);
 }
 
 bool isDiscPath(const std::string& path, Ps2AssetLocator::Source source)
@@ -283,7 +296,14 @@ bool candidateHasPak(const Candidate& candidate)
             return false;
         return AssetPak::mountFile(pakPath);
     }
-    return AssetPak::mountFrom(installRoot);
+    if (AssetPak::mountFrom(installRoot))
+        return true;
+    if (!installRoot.empty() && installRoot.back() == ':')
+    {
+        if (AssetPak::mountFrom(installRoot + "/"))
+            return true;
+    }
+    return false;
 }
 
 bool selectFrom(const std::vector<Candidate>& candidates)
