@@ -66,7 +66,13 @@ bool PakFile::open(const std::string &path)
         file_ = std::fopen(cand.c_str(), "rb");
         if (file_ != nullptr)
         {
-            return true;
+            unsigned char testBuf[4];
+            if (std::fread(testBuf, 1, 4, file_) == 4 && std::fseek(file_, 0, SEEK_SET) == 0)
+            {
+                return true;
+            }
+            std::fclose(file_);
+            file_ = nullptr;
         }
     }
 
