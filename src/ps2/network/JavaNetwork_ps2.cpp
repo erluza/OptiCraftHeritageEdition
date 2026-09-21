@@ -25,6 +25,16 @@
 #include "platform/Log.h"
 #include "NetworkTelemetry.h"
 
+#ifndef FIONBIO
+#define FIONBIO 0x8004667e
+#endif
+
+extern "C"
+{
+#undef lwip_ioctl
+int lwip_ioctl(int s, long cmd, void *argp);
+}
+
 namespace JavaNetwork
 {
 namespace
@@ -123,23 +133,34 @@ public:
 		int nodelay = 1;
 		::setsockopt(socketFd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
-		// Set non-blocking mode via libcglue fcntl
+		// Set non-blocking mode on PS2 lwIP.
+		// In libps2_drivers.a (__ps2ipeeFcntlfsetflHelper):
+		// it only tests bit 0 (flags & 1) to pass to lwip_ioctl(FIONBIO).
+		// Because newlib O_NONBLOCK is 0x4000 (0x4000 & 1 == 0), passing O_NONBLOCK
+		// alone incorrectly sets BLOCKING mode! We explicitly pass (1 | O_NONBLOCK)
+		// AND call lwip_ioctl(socketFd, FIONBIO, &nb) directly with nb = 1.
+		int nb = 1;
+		lwip_ioctl(socketFd, FIONBIO, &nb);
 		int origFlags = fcntl(socketFd, F_GETFL, 0);
-		fcntl(socketFd, F_SETFL, (origFlags >= 0 ? origFlags : 0) | O_NONBLOCK);
+		fcntl(socketFd, F_SETFL, (origFlags >= 0 ? origFlags : 0) | 1 | O_NONBLOCK);
 
 		telemetry.setStage(ConnectStage::TCP_CONNECTING, "Connecting TCP (5s timeout via select)");
+		telemetry.logEvent("Calling connect()...");
 		int connRes = ::connect(socketFd, reinterpret_cast<sockaddr *>(&target), sizeof(target));
-		telemetry.setLastErrno(errno);
+		int savedErrno = errno;
+		telemetry.setLastErrno(savedErrno);
+		telemetry.logEvent("connect() returned %d (errno=%d)", connRes, savedErrno);
+
 		if (connRes < 0)
 		{
-			if (errno != EINPROGRESS && errno != EALREADY && errno != EWOULDBLOCK)
+			if (savedErrno != EINPROGRESS && savedErrno != EALREADY && savedErrno != EWOULDBLOCK)
 			{
-				telemetry.setError(std::string("connect() failed immediately: errno=") + std::to_string(errno));
+				telemetry.setError(std::string("connect() failed immediately: errno=") + std::to_string(savedErrno));
 				close();
 				return false;
 			}
 
-			// Wait for connection with a 5-second timeout
+			// Wait for connection with a 5-second timeout via select()
 			fd_set writeSet;
 			FD_ZERO(&writeSet);
 			FD_SET(socketFd, &writeSet);
@@ -147,9 +168,12 @@ public:
 			tv.tv_sec = 5;
 			tv.tv_usec = 0;
 
+			telemetry.logEvent("Waiting up to 5s for connect (select)...");
 			int sel = ::select(socketFd + 1, nullptr, &writeSet, nullptr, &tv);
 			telemetry.setSelectResult(sel);
 			telemetry.setLastErrno(errno);
+			telemetry.logEvent("select() returned %d (errno=%d)", sel, errno);
+
 			if (sel <= 0)
 			{
 				telemetry.setError(sel == 0 ? "TCP connect timed out (5s)" : (std::string("select() error: errno=") + std::to_string(errno)));
@@ -170,7 +194,9 @@ public:
 		}
 
 		// Switch back to blocking mode for read/write operations
-		fcntl(socketFd, F_SETFL, (origFlags >= 0 ? origFlags : 0));
+		int blocking = 0;
+		lwip_ioctl(socketFd, FIONBIO, &blocking);
+		fcntl(socketFd, F_SETFL, (origFlags >= 0 ? origFlags : 0) & ~1);
 
 		telemetry.setStage(ConnectStage::INITIALIZING_STREAMS, "TCP connected, initializing streams");
 		return true;

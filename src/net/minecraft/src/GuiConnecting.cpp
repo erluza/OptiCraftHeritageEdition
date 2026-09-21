@@ -16,6 +16,7 @@
 
 #ifdef PS2_PLATFORM
 #include <kernel.h>
+#include <unistd.h>
 #include "ps2/system/Ps2ThreadPriority.h"
 #include "ps2/input/Ps2PadState.h"
 #include "ps2/network/Ps2Network.h"
@@ -91,7 +92,11 @@ void GuiConnecting::updateScreen()
 	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkWorker);
 	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkReader);
 	RotateThreadReadyQueue(Ps2ThreadPriority::kNetworkWriter);
+	RotateThreadReadyQueue(86);
+	RotateThreadReadyQueue(87);
+	RotateThreadReadyQueue(89);
 	RotateThreadReadyQueue(Ps2ThreadPriority::kMain);
+	usleep(1000);
 #endif
 	if (clientHandler == nullptr && connectThread != nullptr)
 	{
