@@ -1,6 +1,7 @@
 #include "OchPackReader.h"
 #include "platform/Storage.h"
 #include "platform/Log.h"
+#include "platform/storage/PosixFileSystem.h"
 #include "unzip.h"
 
 #include <cstdio>
@@ -66,6 +67,21 @@ bool readInfo(const std::string &filePath, OchPackInfo &outInfo)
     if (!uf)
         uf = unzOpen64(filePath.c_str());
 
+    // If still null, try adding slash after colon (e.g. host:mods/... -> host:/mods/...)
+    if (!uf)
+    {
+        size_t colon = filePath.find(':');
+        if (colon != std::string::npos && colon + 1 < filePath.size() && filePath[colon + 1] != '/')
+        {
+            std::string alt = filePath.substr(0, colon + 1) + "/" + filePath.substr(colon + 1);
+            uf = unzOpen(alt.c_str());
+            if (!uf)
+                uf = unzOpen64(alt.c_str());
+            if (uf)
+                outInfo.filePath = alt;
+        }
+    }
+
     if (!uf)
     {
         MC_LOG_WARN("mods", "OchPackReader: Failed to open '%s'\n", filePath.c_str());
@@ -128,27 +144,152 @@ bool readInfo(const std::string &filePath, OchPackInfo &outInfo)
 std::vector<OchPackInfo> scanDirectory(const std::string &dirPath)
 {
     std::vector<OchPackInfo> results;
-    std::vector<std::string> entries;
-    if (!PlatformStorage::listPathEntries(dirPath, entries))
-        return results;
+    std::vector<std::string> candidateFiles;
 
-    for (const auto &entry : entries)
+    // 1. Try reading packlist.txt or mods.list in this directory
+    static const char* const LIST_NAMES[] = {
+        "packlist.txt",
+        "mods.list",
+        "mods.txt"
+    };
+
+    for (const char* listName : LIST_NAMES)
     {
-        if (entry.size() < 8)
-            continue;
-
-        std::string ext = entry.substr(entry.size() - 8);
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-        if (ext == ".ochpack")
+        std::string listPath = PlatformStorage::join(dirPath, listName);
+        std::vector<unsigned char> listData;
+        if (PlatformStorage::readFile(listPath, listData) && !listData.empty())
         {
-            std::string fullPath = PlatformStorage::join(dirPath, entry);
-            OchPackInfo info;
-            if (readInfo(fullPath, info))
+            std::string listContent(listData.begin(), listData.end());
+            std::istringstream stream(listContent);
+            std::string line;
+            while (std::getline(stream, line))
             {
-                results.push_back(info);
+                while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t'))
+                    line.pop_back();
+                while (!line.empty() && (line.front() == ' ' || line.front() == '\t'))
+                    line.erase(line.begin());
+
+                if (!line.empty() && line[0] != '#' && line[0] != ';')
+                {
+                    candidateFiles.push_back(line);
+                }
+            }
+            break;
+        }
+    }
+
+    // 2. Built-in candidate probe list for filesystems where opendir() is not supported (e.g. PCSX2 host:, CD-ROM)
+    static const char* const PROBE_NAMES[] = {
+        "TooManyItems.ochpack",
+        "toomanyitems.ochpack",
+        "ReiMinimap.ochpack",
+        "reiminimap.ochpack",
+        "SampleTestMod.ochpack",
+        "sampletestmod.ochpack",
+        "CraftGuide.ochpack",
+        "craftguide.ochpack",
+        "OptiFine.ochpack",
+        "optifine.ochpack",
+        "Mod.ochpack",
+        "mod.ochpack",
+        "Test.ochpack",
+        "test.ochpack"
+    };
+
+    for (const char* probeName : PROBE_NAMES)
+    {
+        bool alreadyCandidate = false;
+        for (const auto& c : candidateFiles)
+        {
+            if (c == probeName)
+            {
+                alreadyCandidate = true;
+                break;
+            }
+        }
+        if (!alreadyCandidate)
+            candidateFiles.push_back(probeName);
+    }
+
+    // 3. Try standard directory enumeration (for platforms where opendir works, like PC & USB FAT32)
+    std::vector<std::string> entries;
+    if (PlatformStorage::listPathEntries(dirPath, entries))
+    {
+        for (const auto &entry : entries)
+        {
+            if (entry.size() >= 8)
+            {
+                std::string ext = entry.substr(entry.size() - 8);
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext == ".ochpack")
+                {
+                    bool alreadyCandidate = false;
+                    for (const auto& c : candidateFiles)
+                    {
+                        if (c == entry)
+                        {
+                            alreadyCandidate = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyCandidate)
+                        candidateFiles.push_back(entry);
+                }
             }
         }
     }
+
+    // 4. Test each candidate file
+    for (const auto &fileName : candidateFiles)
+    {
+        std::string fullPath = PlatformStorage::join(dirPath, fileName);
+        if (PlatformStorage::fileReadable(fullPath))
+        {
+            OchPackInfo info;
+            if (readInfo(fullPath, info))
+            {
+                bool duplicate = false;
+                for (const auto &existing : results)
+                {
+                    if (existing.id == info.id)
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (!duplicate)
+                    results.push_back(info);
+            }
+        }
+        else
+        {
+            // Try alternative slash after colon (e.g. host:mods/file -> host:/mods/file)
+            size_t colon = fullPath.find(':');
+            if (colon != std::string::npos && colon + 1 < fullPath.size() && fullPath[colon + 1] != '/')
+            {
+                std::string alt = fullPath.substr(0, colon + 1) + "/" + fullPath.substr(colon + 1);
+                if (PlatformStorage::fileReadable(alt))
+                {
+                    OchPackInfo info;
+                    if (readInfo(alt, info))
+                    {
+                        bool duplicate = false;
+                        for (const auto &existing : results)
+                        {
+                            if (existing.id == info.id)
+                            {
+                                duplicate = true;
+                                break;
+                            }
+                        }
+                        if (!duplicate)
+                            results.push_back(info);
+                    }
+                }
+            }
+        }
+    }
+
     return results;
 }
 }

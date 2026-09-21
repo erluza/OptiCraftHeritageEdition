@@ -158,7 +158,19 @@ void GuiLoadModsList::scanPacks()
         {
             scanDirs.push_back(PlatformStorage::join(inst, "mods"));
             scanDirs.push_back(inst);
+            if (inst.back() == ':')
+            {
+                scanDirs.push_back(inst + "/mods");
+                scanDirs.push_back(inst + "/");
+            }
         }
+        scanDirs.push_back("host:mods");
+        scanDirs.push_back("host:/mods");
+        scanDirs.push_back("host:");
+        scanDirs.push_back("host:/");
+        scanDirs.push_back("cdrom0:/mods");
+        scanDirs.push_back("cdrom0:/MODS");
+        scanDirs.push_back("cdrom0:/");
 #endif
         scanDirs.push_back("./mods");
         scanDirs.push_back("mods");
