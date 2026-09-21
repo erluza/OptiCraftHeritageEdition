@@ -116,56 +116,141 @@ static int ZCALLBACK mem_error(voidpf opaque, voidpf stream)
     return 0;
 }
 
-static bool readFileBytes(const std::string &path, std::vector<unsigned char> &out, std::string *resolvedPath = nullptr)
+static void addUniqueCandidate(std::vector<std::string> &candidates, const std::string &cand)
+{
+    if (cand.empty())
+        return;
+    for (const auto &c : candidates)
+    {
+        if (c == cand)
+            return;
+    }
+    candidates.push_back(cand);
+}
+
+static void generateCandidates(const std::string &path, std::vector<std::string> &candidates)
+{
+    addUniqueCandidate(candidates, path);
+
+    size_t colon = path.find(':');
+    std::string scheme = (colon != std::string::npos) ? path.substr(0, colon + 1) : "";
+    std::string rest = (colon != std::string::npos) ? path.substr(colon + 1) : path;
+
+    // Strip leading slashes from rest
+    size_t start = 0;
+    while (start < rest.size() && (rest[start] == '/' || rest[start] == '\\'))
+        start++;
+    std::string cleanRest = rest.substr(start);
+
+    std::string restSlash = cleanRest;
+    std::string restBs = cleanRest;
+    for (char &c : restSlash) if (c == '\\') c = '/';
+    for (char &c : restBs) if (c == '/') c = '\\';
+
+    std::string restUpperSlash = restSlash;
+    std::string restUpperBs = restBs;
+    for (char &c : restUpperSlash) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    for (char &c : restUpperBs) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+
+    std::vector<std::string> schemes;
+    if (!scheme.empty())
+    {
+        schemes.push_back(scheme);
+        std::string upperScheme = scheme;
+        for (char &c : upperScheme) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        schemes.push_back(upperScheme);
+        std::string lowerScheme = scheme;
+        for (char &c : lowerScheme) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        schemes.push_back(lowerScheme);
+    }
+    else
+    {
+        schemes.push_back("");
+    }
+
+    const char *separators[] = { "", "/", "\\" };
+    const std::string *rests[] = { &restBs, &restSlash, &restUpperBs, &restUpperSlash };
+
+    for (const auto &s : schemes)
+    {
+        for (const char *sep : separators)
+        {
+            if (s.empty() && sep[0] != '\0')
+                continue;
+
+            for (const std::string *r : rests)
+            {
+                if (r->empty())
+                    continue;
+                std::string combined = s + sep + (*r);
+                addUniqueCandidate(candidates, combined);
+                addUniqueCandidate(candidates, combined + ";1");
+                addUniqueCandidate(candidates, combined + ";2");
+            }
+        }
+    }
+}
+
+static bool readFileBytesInternal(const std::string &path, std::vector<unsigned char> &out, std::string *resolvedPath = nullptr)
 {
     std::vector<std::string> candidates;
-    candidates.push_back(path);
-
-    // Backslash variant
-    std::string bs = path;
-    for (char &c : bs)
-        if (c == '/')
-            c = '\\';
-    if (bs != path)
-        candidates.push_back(bs);
-
-    // Slash after colon (host:mods -> host:/mods)
-    size_t colon = path.find(':');
-    if (colon != std::string::npos && colon + 1 < path.size() && path[colon + 1] != '/' && path[colon + 1] != '\\')
-    {
-        std::string withSlash = path.substr(0, colon + 1) + "/" + path.substr(colon + 1);
-        candidates.push_back(withSlash);
-
-        std::string withBs = path.substr(0, colon + 1) + "\\" + path.substr(colon + 1);
-        for (char &c : withBs)
-            if (c == '/')
-                c = '\\';
-        candidates.push_back(withBs);
-    }
+    generateCandidates(path, candidates);
 
     for (const auto &candidate : candidates)
     {
         FILE *f = std::fopen(candidate.c_str(), "rb");
-        if (f)
+        if (!f)
+            continue;
+
+        long sz = -1;
+        if (std::fseek(f, 0, SEEK_END) == 0)
         {
-            std::fseek(f, 0, SEEK_END);
-            long sz = std::ftell(f);
-            std::fseek(f, 0, SEEK_SET);
-            if (sz > 0)
+            sz = std::ftell(f);
+        }
+
+        if (sz <= 0)
+        {
+            const std::int64_t reported = PlatformStorage::fileSize(candidate);
+            if (reported > 0 && reported <= 0x7fffffffLL)
+                sz = static_cast<long>(reported);
+        }
+
+        // Always re-open fresh: on PS2 optical drives, seeking to SEEK_END can leave the driver in an invalid state
+        std::fclose(f);
+        f = std::fopen(candidate.c_str(), "rb");
+        if (!f)
+            continue;
+
+        out.clear();
+        if (sz > 0)
+        {
+            out.resize(static_cast<size_t>(sz));
+            size_t readCount = std::fread(out.data(), 1, static_cast<size_t>(sz), f);
+            std::fclose(f);
+            if (readCount > 0)
             {
-                out.resize(static_cast<size_t>(sz));
-                size_t readCount = std::fread(out.data(), 1, static_cast<size_t>(sz), f);
-                std::fclose(f);
-                if (readCount == static_cast<size_t>(sz))
-                {
-                    if (resolvedPath)
-                        *resolvedPath = candidate;
-                    return true;
-                }
+                if (readCount < static_cast<size_t>(sz))
+                    out.resize(readCount);
+                if (resolvedPath)
+                    *resolvedPath = candidate;
+                return true;
             }
-            else
+        }
+        else
+        {
+            // Streamed chunk read fallback for drivers that don't report size
+            unsigned char buf[4096];
+            size_t n = 0;
+            while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0)
             {
-                std::fclose(f);
+                out.insert(out.end(), buf, buf + n);
+            }
+            std::fclose(f);
+            if (!out.empty())
+            {
+                if (resolvedPath)
+                    *resolvedPath = candidate;
+                return true;
             }
         }
     }
@@ -258,6 +343,11 @@ bool readInfoFromBytes(const std::vector<unsigned char> &data, const std::string
     return true;
 }
 
+bool readFileBytes(const std::string &path, std::vector<unsigned char> &out, std::string *resolvedPath)
+{
+    return readFileBytesInternal(path, out, resolvedPath);
+}
+
 bool readInfo(const std::string &filePath, OchPackInfo &outInfo)
 {
     std::vector<unsigned char> data;
@@ -278,18 +368,22 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath, std::vector<s
     // 1. Try reading packlist.txt or mods.list in this directory
     static const char *const LIST_NAMES[] = {
         "packlist.txt",
+        "PACKLIST.TXT",
         "mods.list",
-        "mods.txt"
+        "MODS.LIST",
+        "mods.txt",
+        "MODS.TXT"
     };
 
     for (const char *listName : LIST_NAMES)
     {
         std::string listPath = PlatformStorage::join(dirPath, listName);
         std::vector<unsigned char> listData;
-        if (readFileBytes(listPath, listData) && !listData.empty())
+        std::string resolvedListPath;
+        if (readFileBytes(listPath, listData, &resolvedListPath) && !listData.empty())
         {
             if (outDebugLogs)
-                outDebugLogs->push_back("Found " + std::string(listName) + " in " + dirPath);
+                outDebugLogs->push_back("Found " + std::string(listName) + " at " + resolvedListPath);
             std::string listContent(listData.begin(), listData.end());
             std::istringstream stream(listContent);
             std::string line;
@@ -313,18 +407,25 @@ std::vector<OchPackInfo> scanDirectory(const std::string &dirPath, std::vector<s
     static const char *const PROBE_NAMES[] = {
         "TooManyItems.ochpack",
         "toomanyitems.ochpack",
+        "TOOMANYITEMS.OCHPACK",
         "ReiMinimap.ochpack",
         "reiminimap.ochpack",
+        "REIMINIMAP.OCHPACK",
         "SampleTestMod.ochpack",
         "sampletestmod.ochpack",
+        "SAMPLETESTMOD.OCHPACK",
         "CraftGuide.ochpack",
         "craftguide.ochpack",
+        "CRAFTGUIDE.OCHPACK",
         "OptiFine.ochpack",
         "optifine.ochpack",
+        "OPTIFINE.OCHPACK",
         "Mod.ochpack",
         "mod.ochpack",
+        "MOD.OCHPACK",
         "Test.ochpack",
-        "test.ochpack"
+        "test.ochpack",
+        "TEST.OCHPACK"
     };
 
     for (const char *probeName : PROBE_NAMES)

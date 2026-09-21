@@ -187,22 +187,13 @@ bool ModManager::installModPack(const std::string &sourcePath, std::string &outE
 
     std::string destPath = PlatformStorage::join(modsDir, info.fileName);
 
-    // Read source file data
+    // Read source file data using OchPackReader for full optical disc & candidate support
     std::vector<unsigned char> data;
-    if (!PlatformStorage::readFile(sourcePath, data) || data.empty())
+    if (!OchPackReader::readFileBytes(sourcePath, data))
     {
-        FILE *in = std::fopen(sourcePath.c_str(), "rb");
-        if (in != nullptr)
+        if (!info.filePath.empty() && info.filePath != sourcePath)
         {
-            std::fseek(in, 0, SEEK_END);
-            long sz = std::ftell(in);
-            std::fseek(in, 0, SEEK_SET);
-            if (sz > 0)
-            {
-                data.resize(sz);
-                std::fread(data.data(), 1, sz, in);
-            }
-            std::fclose(in);
+            OchPackReader::readFileBytes(info.filePath, data);
         }
     }
 

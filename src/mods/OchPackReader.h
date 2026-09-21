@@ -17,6 +17,9 @@ struct OchPackInfo
 
 namespace OchPackReader
 {
+    // Read file bytes with full candidate path and ISO-9660 disc fallback
+    bool readFileBytes(const std::string &path, std::vector<unsigned char> &out, std::string *resolvedPath = nullptr);
+
     // Read and parse mod.info / manifest.txt from an .ochpack zip file
     bool readInfo(const std::string &filePath, OchPackInfo &outInfo);
 

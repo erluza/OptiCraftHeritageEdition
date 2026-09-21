@@ -159,20 +159,28 @@ void GuiLoadModsList::scanPacks()
         if (!inst.empty())
         {
             scanDirs.push_back(PlatformStorage::join(inst, "mods"));
+            scanDirs.push_back(PlatformStorage::join(inst, "MODS"));
             scanDirs.push_back(inst);
             if (inst.back() == ':')
             {
                 scanDirs.push_back(inst + "/mods");
+                scanDirs.push_back(inst + "/MODS");
+                scanDirs.push_back(inst + "\\mods");
+                scanDirs.push_back(inst + "\\MODS");
                 scanDirs.push_back(inst + "/");
             }
         }
+        scanDirs.push_back("cdrom0:/mods");
+        scanDirs.push_back("cdrom0:/MODS");
+        scanDirs.push_back("cdrom0:\\MODS");
+        scanDirs.push_back("cdrom0:MODS");
+        scanDirs.push_back("cdrom0:mods");
+        scanDirs.push_back("cdrom0:/");
+        scanDirs.push_back("cdrom0:");
         scanDirs.push_back("host:mods");
         scanDirs.push_back("host:/mods");
         scanDirs.push_back("host:");
         scanDirs.push_back("host:/");
-        scanDirs.push_back("cdrom0:/mods");
-        scanDirs.push_back("cdrom0:/MODS");
-        scanDirs.push_back("cdrom0:/");
 #endif
         scanDirs.push_back("./mods");
         scanDirs.push_back("mods");
@@ -181,8 +189,13 @@ void GuiLoadModsList::scanPacks()
     else
     {
         scanDirs.push_back("mass:/mods");
+        scanDirs.push_back("mass:/MODS");
+        scanDirs.push_back("mass:/OptiCraftHeritage/mods");
+        scanDirs.push_back("mass:/OptiCraftHeritage/MODS");
         scanDirs.push_back("mass:/");
         scanDirs.push_back("mass0:/mods");
+        scanDirs.push_back("mass0:/MODS");
+        scanDirs.push_back("mass0:/OptiCraftHeritage/mods");
         scanDirs.push_back("mass0:/");
         scanDirs.push_back("usb/mods");
         scanDirs.push_back("usb");
