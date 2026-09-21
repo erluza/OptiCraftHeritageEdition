@@ -90,8 +90,11 @@ bool initialize()
     // 3. Set Ethernet link mode to auto-negotiation
     applyLinkMode(NETMAN_NETIF_ETH_LINK_MODE_AUTO);
 
-    // 4. Initialize TCP/IP stack with zeroes for DHCP
+    // 4. Initialize TCP/IP stack with dummy address as required by PS2SDK ps2ip
     struct ip4_addr ip{}, nm{}, gw{};
+    ip.addr = inet_addr("169.254.0.1");
+    nm.addr = inet_addr("255.255.0.0");
+    gw.addr = inet_addr("169.254.0.254");
     res = ps2ipInit(&ip, &nm, &gw);
     if (res < 0)
     {
@@ -103,6 +106,7 @@ bool initialize()
     // 5. Request DHCP on "sm0" (SMAP Ethernet device)
     char ifName[4] = "sm0";
     t_ip_info ipInfo{};
+    std::strncpy(ipInfo.netif_name, ifName, sizeof(ipInfo.netif_name));
     if (ps2ip_getconfig(ifName, &ipInfo) >= 0)
     {
         ipInfo.dhcp_enabled = 1;
@@ -117,7 +121,8 @@ bool initialize()
         if (ps2ip_getconfig(ifName, &ipInfo) >= 0)
         {
             unsigned long rawIp = ipInfo.ipaddr.s_addr;
-            if (rawIp != 0 && (ipInfo.dhcp_status == DHCP_STATE_BOUND || ipInfo.dhcp_status == DHCP_STATE_OFF))
+            if (rawIp != 0 && rawIp != inet_addr("169.254.0.1") &&
+                (ipInfo.dhcp_status == DHCP_STATE_BOUND || ipInfo.dhcp_status == DHCP_STATE_OFF))
             {
                 char buf[32];
                 std::snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
@@ -164,20 +169,24 @@ DiagnosticResult testConnection()
     }
     res.linkUp = true;
 
-    // Refresh IP info from SMAP interface; if DHCP is negotiating, wait briefly
+    // Refresh IP info from SMAP interface; if DHCP is negotiating, wait briefly (up to 1.5s)
     char ifName[4] = "sm0";
     t_ip_info ipInfo{};
     for (int i = 0; i < 15; ++i)
     {
-        if (ps2ip_getconfig(ifName, &ipInfo) >= 0 && ipInfo.ipaddr.s_addr != 0)
-            break;
+        if (ps2ip_getconfig(ifName, &ipInfo) >= 0)
+        {
+            unsigned long rawIp = ipInfo.ipaddr.s_addr;
+            if (rawIp != 0 && rawIp != inet_addr("169.254.0.1"))
+                break;
+        }
         DelayThread(100000); // 100ms
     }
 
     if (ps2ip_getconfig(ifName, &ipInfo) >= 0)
     {
         unsigned long rawIp = ipInfo.ipaddr.s_addr;
-        if (rawIp != 0)
+        if (rawIp != 0 && rawIp != inet_addr("169.254.0.1"))
         {
             char buf[32];
             std::snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
@@ -193,8 +202,69 @@ DiagnosticResult testConnection()
         }
     }
 
+    // Fallback: If DHCP didn't lease an IP (common in PCSX2 Sockets mode without InterceptDHCP),
+    // try the standard PCSX2 Sockets static IP (192.168.1.10 / GW 192.168.1.1)
     if (!res.hasIp)
     {
+        t_ip_info staticInfo{};
+        std::strncpy(staticInfo.netif_name, "sm0", sizeof(staticInfo.netif_name));
+        staticInfo.ipaddr.s_addr = inet_addr("192.168.1.10");
+        staticInfo.netmask.s_addr = inet_addr("255.255.255.0");
+        staticInfo.gw.s_addr = inet_addr("192.168.1.1");
+        staticInfo.dhcp_enabled = 0;
+        ps2ip_setconfig(&staticInfo);
+
+        int testSock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (testSock >= 0)
+        {
+            int nb = 1;
+            lwip_ioctl(testSock, FIONBIO, &nb);
+            sockaddr_in target{};
+            target.sin_len = sizeof(target);
+            target.sin_family = AF_INET;
+            target.sin_port = htons(53);
+            target.sin_addr.s_addr = inet_addr("8.8.8.8");
+
+            auto start = std::chrono::steady_clock::now();
+            int conn = ::connect(testSock, reinterpret_cast<sockaddr *>(&target), sizeof(target));
+            bool ok = (conn == 0);
+            if (!ok)
+            {
+                fd_set ws;
+                FD_ZERO(&ws);
+                FD_SET(testSock, &ws);
+                struct timeval tv{ 1, 200000 };
+                if (::select(testSock + 1, nullptr, &ws, nullptr, &tv) > 0)
+                {
+                    int err = 0;
+                    socklen_t len = sizeof(err);
+                    if (::getsockopt(testSock, SOL_SOCKET, SO_ERROR, &err, &len) == 0 && err == 0)
+                        ok = true;
+                }
+            }
+            if (ok)
+            {
+                auto end = std::chrono::steady_clock::now();
+                res.pingMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+                res.pingOk = true;
+                res.hasIp = true;
+                res.ipAddress = "192.168.1.10";
+                res.statusMessage = "Online! IP: " + res.ipAddress + " | Ping 8.8.8.8: " + std::to_string(res.pingMs) + "ms";
+                std::lock_guard<std::mutex> guard(s_stateMutex);
+                s_ipAddress = res.ipAddress;
+                s_ready = true;
+                ::close(testSock);
+                return res;
+            }
+            ::close(testSock);
+        }
+
+        if (ps2ip_getconfig(ifName, &ipInfo) >= 0)
+        {
+            ipInfo.dhcp_enabled = 1;
+            ps2ip_setconfig(&ipInfo);
+        }
+
         res.statusMessage = "Link up | Waiting for DHCP lease...";
         return res;
     }
