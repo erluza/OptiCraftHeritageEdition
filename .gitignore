@@ -387,3 +387,7 @@ docs/
 mcbeta.zip
 ninja.exe
 assets/
+assets.pak
+EBOOT.PBP
+bin/psp/
+
