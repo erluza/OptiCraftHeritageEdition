@@ -302,13 +302,13 @@ void LegacyCreateWorldScreen::moveSelection(int_t direction)
 void LegacyCreateWorldScreen::updateScreen()
 {
     GuiCreateWorld::updateScreen();
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
     // The virtual keyboard owns the console text-input snapshot while a field is
     // focused. Do not let menu navigation consume the same presses underneath it.
     if (platformTextInputExclusive())
         return;
     const PlatformTextInputSnapshot pad = platformTextInputSnapshot(platformMenuPad());
-#if PLATFORM_PS2
+#if PLATFORM_PS2 || PLATFORM_PSP
     if ((pad.pressed & (PLATFORM_TEXT_CLOSE | PLATFORM_TEXT_SHIFT)) != 0)
     {
         if (mc->sndManager != nullptr)
@@ -325,7 +325,7 @@ void LegacyCreateWorldScreen::updateScreen()
         adjustSelection(-1);
     else if ((pad.pressed & PLATFORM_TEXT_RIGHT) != 0)
         adjustSelection(1);
-#if PLATFORM_PS2
+#if PLATFORM_PS2 || PLATFORM_PSP
     if ((pad.pressed & PLATFORM_TEXT_TYPE) != 0)
         activateSelection();
 #elif PLATFORM_WII

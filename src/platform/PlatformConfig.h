@@ -183,7 +183,7 @@
 // re-points both contexts at the new draw buffer while PrimContext stays put,
 // so the every-other-frame old/black screen once blamed on per-context depth
 // state was really FRAME.FBP (see ps2_apply_color_mask).
-#  define PLATFORM_GUI_FORCE_DEPTH_DISABLED (PLATFORM_PS2 || PLATFORM_WII)
+#  define PLATFORM_GUI_FORCE_DEPTH_DISABLED (PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP)
 #endif
 
 #ifndef PLATFORM_CHUNK_EDGE_FOG

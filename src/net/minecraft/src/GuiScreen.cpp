@@ -37,11 +37,11 @@ namespace
 // permanently switched off.
 bool menuPointerInputSuppressed(Minecraft *mc)
 {
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 	if (mc != nullptr && mc->currentScreen != nullptr && mc->currentScreen->suppressesPlatformPointerInput())
 		return true;
 #endif
-#if PLATFORM_PS2
+#if PLATFORM_PS2 || PLATFORM_PSP
 	return mc != nullptr && mc->gameSettings != nullptr && mc->gameSettings->legacyUI &&
 	       (mc->currentScreen == nullptr || !mc->currentScreen->allowsPlatformPointerInput());
 #elif PLATFORM_WII
@@ -306,6 +306,9 @@ void GuiScreen::handleInput()
 	handleConsoleJavaUiNavigation();
 #endif
 #endif
+#if PLATFORM_PSP
+	handleConsoleJavaUiNavigation();
+#endif
 	while (lwjgl::Mouse::next()) handleMouseInput();
 	while (lwjgl::Keyboard::next()) handleKeyboardInput();
 }
@@ -507,7 +510,7 @@ bool GuiScreen::handleJavaUiNavigationKey(int_t key)
 
 void GuiScreen::moveMenuCursorToKeyboardSelection()
 {
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 	if (mc == nullptr || keyboardSelectedControlIndex < 0 ||
 		keyboardSelectedControlIndex >= static_cast<int_t>(controlList.size()) || width <= 0 || height <= 0)
 		return;
@@ -535,7 +538,7 @@ void GuiScreen::clearKeyboardSelectionFromPointer()
 	}
 }
 
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 void GuiScreen::handleConsoleJavaUiNavigation()
 {
 	if (!isJavaUiKeyboardNavigationEnabled())

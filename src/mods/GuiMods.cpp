@@ -8,7 +8,7 @@
 #include "GuiTexturePacks.h"
 #include "mods/ModManager.h"
 
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 #include "platform/Input.h"
 #endif
 
@@ -160,7 +160,7 @@ void GuiMods::keyTyped(char_t c, int_t key)
 
 void GuiMods::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
 {
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
     const PlatformTextInputSnapshot pad = platformTextInputSnapshot(platformMenuPad());
     if ((pad.pressed & (PLATFORM_TEXT_BACK | PLATFORM_TEXT_CLOSE)) != 0)
     {

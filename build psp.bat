@@ -23,6 +23,10 @@ if exist "C:\Users\user\Downloads\ppsspp\memstick\PSP\GAME\OptiCraft" (
     copy /Y "EBOOT.PBP" "C:\Users\user\Downloads\ppsspp\memstick\PSP\GAME\OptiCraft\EBOOT.PBP" >nul
     echo [OK] EBOOT.PBP deployed to PPSSPP memstick.
 )
+if exist "C:\Users\user\Downloads\PPSSPP-v1.20.4-Windows-x64\memstick\PSP\GAME\OptiCraft" (
+    copy /Y "EBOOT.PBP" "C:\Users\user\Downloads\PPSSPP-v1.20.4-Windows-x64\memstick\PSP\GAME\OptiCraft\EBOOT.PBP" >nul
+    echo [OK] EBOOT.PBP deployed to PPSSPP-v1.20.4 memstick.
+)
 
 echo ===================================================
 echo   Build and deployment successful!

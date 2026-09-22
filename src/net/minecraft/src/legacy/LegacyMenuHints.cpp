@@ -10,7 +10,7 @@ void drawLegacyMenuHints(FontRenderer *font, int_t, int_t screenHeight, bool sho
     if (font == nullptr)
         return;
 
-#if PLATFORM_PS2
+#if PLATFORM_PS2 || PLATFORM_PSP
     const std::string navigate = "[D-Pad] Navigate";
     const std::string select = "[X] Select";
     const std::string back = "[O] Back";

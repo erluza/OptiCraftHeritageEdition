@@ -134,9 +134,9 @@ void LegacyOptionsScreen::updateScreen()
 {
     GuiScreen::updateScreen();
     syncLegacySelection();
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
     const PlatformTextInputSnapshot pad = platformTextInputSnapshot(platformMenuPad());
-#if PLATFORM_PS2
+#if PLATFORM_PS2 || PLATFORM_PSP
     std::uint32_t pressed = pad.pressed;
     if (ps2ActionReleaseLatch)
     {
