@@ -332,7 +332,7 @@ EntityRenderer::EntityRenderer(Minecraft* minecraft)
     
     mc = minecraft;
     itemRenderer = new ItemRenderer(minecraft);
-#if !defined(PS2_PLATFORM)
+#if !defined(PS2_PLATFORM) && !PLATFORM_PSP
     BufferedImage lightmapImage(16, 16);
     lightmapTexture = minecraft->renderEngine->allocateAndSetupTexture(&lightmapImage, true);
 #endif
@@ -491,7 +491,7 @@ void EntityRenderer::updateLightmap()
     }
     ps2TerrainLightBucket = terrainLightBucket;
     ps2TerrainLightningActive = lightningActive;
-#else
+#elif !PLATFORM_PSP
     if (lightmapTexture >= 0)
         mc->renderEngine->updateTextureSubImage(lightmapColors, 16, 16, lightmapTexture);
 #endif
@@ -508,9 +508,18 @@ void EntityRenderer::updateLightmap()
 
 void EntityRenderer::disableLightmap(double)
 {
+#if defined(PS2_PLATFORM)
     OpenGlHelper::setActiveTexture(OpenGlHelper::lightmapTexUnit);
     renderDisable(RenderCapability::Texture2D);
     OpenGlHelper::setActiveTexture(OpenGlHelper::defaultTexUnit);
+#elif PLATFORM_PSP
+    // PSP has only one texture unit (GL_TEXTURE0). Multitexture lightmap is not used.
+    // Disabling Texture2D here would incorrectly disable main terrain/GUI texturing!
+#else
+    OpenGlHelper::setActiveTexture(OpenGlHelper::lightmapTexUnit);
+    renderDisable(RenderCapability::Texture2D);
+    OpenGlHelper::setActiveTexture(OpenGlHelper::defaultTexUnit);
+#endif
 }
 
 void EntityRenderer::enableLightmap(double)
@@ -519,6 +528,8 @@ void EntityRenderer::enableLightmap(double)
     OpenGlHelper::setActiveTexture(OpenGlHelper::lightmapTexUnit);
     renderEnable(RenderCapability::Texture2D);
     OpenGlHelper::setActiveTexture(OpenGlHelper::defaultTexUnit);
+#elif PLATFORM_PSP
+    // PSP has only one texture unit (GL_TEXTURE0). Multitexture lightmap is not used.
 #else
     if (lightmapTexture < 0)
         return;

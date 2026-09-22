@@ -789,7 +789,7 @@ jstring RenderGlobal::getDebugInfoEntities()
 }
 
 #if PLATFORM_CENTER_VERTICAL_RENDERERS
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 int_t RenderGlobal::chooseConsoleVerticalStartSection(int_t playerBlockY) const
 {
 	const int_t maxStartSection = std::max(0, WorldHeight::SECTION_COUNT - renderChunksTall);
@@ -878,7 +878,7 @@ void RenderGlobal::markRenderersForNewPosition(int_t i, int_t j, int_t k)
 	// Console windows favour terrain below the player and move only when the
 	// player reaches a guard edge, avoiding section-boundary oscillation.
 	int_t startSection = 0;
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 	startSection = chooseConsoleVerticalStartSection(j + 8);
 	if (verticalWindowInitialized)
 		remapCenteredVerticalRendererSlots(startSection);
@@ -892,7 +892,7 @@ void RenderGlobal::markRenderersForNewPosition(int_t i, int_t j, int_t k)
 	remapCenteredVerticalRendererSlots(startSection);
 #endif
 	verticalStartSection = startSection;
-#if PLATFORM_PS2 || PLATFORM_WII
+#if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 	verticalWindowInitialized = true;
 #endif
 #endif

@@ -53,6 +53,9 @@
 
 static bool desktopHasOpenGL12()
 {
+#if PLATFORM_PSP
+    return false;
+#else
     const char *version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
     if (version == nullptr)
         return false;
@@ -61,6 +64,7 @@ static bool desktopHasOpenGL12()
     if (std::sscanf(version, "%d.%d", &major, &minor) != 2)
         return false;
     return major > 1 || (major == 1 && minor >= 2);
+#endif
 }
 
 // SDL_GL_GetProcAddress-based runtime loaders (desktop only).
@@ -317,6 +321,42 @@ void renderTextureSubImageRgba(int level, int x, int y, int width, int height, c
 // pixels rather than a format enum.
 void renderTextureImageRgba(int level, int width, int height, const void *pixels)
 {
+#if PLATFORM_PSP
+    // PSP hardware strictly requires textures to be powers of two and at most 512x512.
+    auto isPot = [](int x) { return x > 0 && (x & (x - 1)) == 0; };
+    auto clampPot = [](int x) {
+        int p = 1;
+        while (p < x && p < 512) p <<= 1;
+        if (p > 512) p = 512;
+        return p;
+    };
+
+    if (width > 512 || height > 512 || !isPot(width) || !isPot(height))
+    {
+        const int targetWidth = clampPot(width);
+        const int targetHeight = clampPot(height);
+        std::vector<unsigned char> resampled(static_cast<std::size_t>(targetWidth * targetHeight * 4));
+        const unsigned char *src = static_cast<const unsigned char *>(pixels);
+
+        for (int y = 0; y < targetHeight; ++y)
+        {
+            const int sy = (y * height) / targetHeight;
+            for (int x = 0; x < targetWidth; ++x)
+            {
+                const int sx = (x * width) / targetWidth;
+                const std::size_t srcIdx = (static_cast<std::size_t>(sy) * width + sx) * 4u;
+                const std::size_t dstIdx = (static_cast<std::size_t>(y) * targetWidth + x) * 4u;
+                resampled[dstIdx + 0] = src[srcIdx + 0];
+                resampled[dstIdx + 1] = src[srcIdx + 1];
+                resampled[dstIdx + 2] = src[srcIdx + 2];
+                resampled[dstIdx + 3] = src[srcIdx + 3];
+            }
+        }
+        glTexImage2D(GL_TEXTURE_2D, level, GL_RGBA, targetWidth, targetHeight, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, resampled.data());
+        return;
+    }
+#endif
     glTexImage2D(GL_TEXTURE_2D, level, GL_RGBA, width, height, 0,
                  GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 }
@@ -331,8 +371,13 @@ void renderTextureParameters(bool blur, bool mipmaps, bool clamp)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
                     blur ? GL_LINEAR : (mipmaps ? GL_NEAREST_MIPMAP_LINEAR : GL_NEAREST));
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, blur ? GL_LINEAR : GL_NEAREST);
+#if PLATFORM_PSP
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, clamp ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, clamp ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+#else
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, clamp ? GL_CLAMP : GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, clamp ? GL_CLAMP : GL_REPEAT);
+#endif
 }
 
 void renderApplyTextureQuality(bool blur, int mipmapLevel, bool mipmapLinear, int anisotropy)
@@ -725,6 +770,7 @@ bool renderDrawInterleaved(const RenderInterleavedMesh& mesh)
         glTexCoordPointer(2, GL_FLOAT, mesh.stride, pointerForOffset(mesh.texCoordOffset));
         glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     }
+#if !PLATFORM_PSP
     if (mesh.hasBrightness)
     {
         clientActiveTextureCompat(GL_TEXTURE1_ARB);
@@ -732,6 +778,7 @@ bool renderDrawInterleaved(const RenderInterleavedMesh& mesh)
         glEnableClientState(GL_TEXTURE_COORD_ARRAY);
         clientActiveTextureCompat(GL_TEXTURE0_ARB);
     }
+#endif
     if (mesh.hasColor)
     {
         glColorPointer(4, GL_UNSIGNED_BYTE, mesh.stride, pointerForOffset(mesh.colorOffset));
@@ -750,12 +797,14 @@ bool renderDrawInterleaved(const RenderInterleavedMesh& mesh)
 
     if (mesh.hasTexture)
         glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+#if !PLATFORM_PSP
     if (mesh.hasBrightness)
     {
         clientActiveTextureCompat(GL_TEXTURE1_ARB);
         glDisableClientState(GL_TEXTURE_COORD_ARRAY);
         clientActiveTextureCompat(GL_TEXTURE0_ARB);
     }
+#endif
     if (mesh.hasColor)
         glDisableClientState(GL_COLOR_ARRAY);
     if (mesh.hasNormals)
