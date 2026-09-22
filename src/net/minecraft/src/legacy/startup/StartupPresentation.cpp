@@ -276,6 +276,10 @@ namespace LegacyStartup
 
 void run(Minecraft* minecraft)
 {
+#if PLATFORM_PSP
+    (void)minecraft;
+    return;
+#else
     if (minecraft == nullptr || minecraft->gameSettings == nullptr || minecraft->renderEngine == nullptr)
         return;
 
@@ -297,6 +301,7 @@ void run(Minecraft* minecraft)
 
     const LogoResult second = playLegacyLogo(minecraft, "/legacy/logo2.png", musicStarted);
     (void)second;
+#endif
 }
 
 } // namespace LegacyStartup

@@ -12,6 +12,7 @@
 #include "GuiSelectWorld.h"
 #include "GuiMultiplayer.h"
 #include "GuiTexturePacks.h"
+#include "mods/GuiMods.h"
 #include "StringTranslate.h"
 #include "Tessellator.h"
 #include "MathHelper.h"
@@ -287,7 +288,7 @@ void GuiMainMenu::initGui()
     const int_t y = height / 4 + 48;
     controlList.push_back(new GuiButton(1, width / 2 - 100, y, tr->translateKey("menu.singleplayer")));
     controlList.push_back(multiplayerButton = new GuiButton(2, width / 2 - 100, y + 24, tr->translateKey("menu.multiplayer")));
-    controlList.push_back(new GuiButton(3, width / 2 - 100, y + 48, tr->translateKey("menu.mods")));
+    controlList.push_back(new GuiButton(3, width / 2 - 100, y + 48, "Mods"));
 
     if (mc->hideQuitButton)
     {
@@ -330,7 +331,7 @@ void GuiMainMenu::actionPerformed(GuiButton *button)
             mc->displayGuiScreen(new GuiSelectWorld(this));
     }
     if (button->id == 2) mc->displayGuiScreen(new GuiMultiplayer(this));
-    if (button->id == 3) mc->displayGuiScreen(new GuiTexturePacks(this));
+    if (button->id == 3) mc->displayGuiScreen(new GuiMods(this));
     if (button->id == 4) mc->shutdown();
 }
 

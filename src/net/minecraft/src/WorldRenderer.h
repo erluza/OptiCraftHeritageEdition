@@ -50,6 +50,8 @@ public:
 #endif
 #if PLATFORM_PC
 	void callOcclusionQueryList();
+#endif
+#if PLATFORM_PC || PLATFORM_PSP
 	int_t getGLCallListForPass(int_t pass);
 #endif
 #if defined(WII_PLATFORM) || defined(PS2_PLATFORM)
@@ -61,6 +63,7 @@ public:
 	// Drops an in-flight build and returns its staging lease. The renderer
 	// stays dirty and restarts from scratch on a later scheduler step.
 	void abandonTerrainBuild();
+#endif
 #endif
 	// A dirty mark caused by a light value change. With
 	// PLATFORM_COALESCE_MESH_REBUILDS an active build keeps going and is
@@ -78,6 +81,7 @@ public:
 	// the delta to tell a restarted build from a slow one.
 	unsigned int ps2BuildRestarts = 0;
 #endif
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM) || PLATFORM_PC_LEGACY
 	bool lastTerrainBuildStepDidWork() const;
 #if PLATFORM_PC_LEGACY || PLATFORM_PS2 || PLATFORM_WII
 	bool hasPublishedTerrain() const { return isInitialized; }
@@ -168,7 +172,7 @@ public:
 #endif
 	bool isVisible;
 	bool isInFrustum;
-#if PLATFORM_PC || PLATFORM_PS2
+#if PLATFORM_PC || PLATFORM_PS2 || PLATFORM_PSP
 	// Stronger than isInFrustum: PS2 uses it for its clip fast path and desktop
 	// Fancy Occlusion uses it to avoid querying boxes that cross a frustum plane.
 	bool isFullyInFrustum;
@@ -213,8 +217,10 @@ public:
 #endif
 
 private:
-#if PLATFORM_PC
+#if PLATFORM_PC || PLATFORM_PSP
 	int_t glRenderList;
+#endif
+#if PLATFORM_PC
 	bool needsOcclusionBoxUpdate;
 	void updateOcclusionBox();
 #endif

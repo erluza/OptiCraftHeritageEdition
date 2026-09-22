@@ -1,7 +1,18 @@
 #include "platform/RenderAPI.h"
 
 
+#if defined(PLATFORM_PSP)
+#include <GL/gl.h>
+#include <GL/glu.h>
+#ifndef APIENTRY
+#define APIENTRY
+#endif
+#ifndef APIENTRYP
+#define APIENTRYP APIENTRY *
+#endif
+#else
 #include <glad/glad.h>
+#endif
 #include <SDL.h>
 #ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
@@ -437,9 +448,14 @@ void renderLightModelAmbient(const float* values)
 
 void renderColorMaterial(RenderFace face, RenderColorMaterialMode mode)
 {
+#ifndef PLATFORM_PSP
     GLenum glFace = face == RenderFace::Front ? GL_FRONT : face == RenderFace::Back ? GL_BACK : GL_FRONT_AND_BACK;
     GLenum glMode = mode == RenderColorMaterialMode::Ambient ? GL_AMBIENT : GL_AMBIENT_AND_DIFFUSE;
     glColorMaterial(glFace, glMode);
+#else
+    (void)face;
+    (void)mode;
+#endif
 }
 
 void renderShadeModel(RenderShadeModel model)
@@ -531,7 +547,11 @@ unsigned int renderGetError()
 
 void renderFogHint(RenderHintMode mode)
 {
+#ifndef PLATFORM_PSP
     glHint(GL_FOG_HINT, mode == RenderHintMode::Nicest ? GL_NICEST : GL_FASTEST);
+#else
+    (void)mode;
+#endif
 }
 
 
@@ -594,6 +614,17 @@ void renderOrtho(double left, double right, double bottom, double top, double ne
 
 int renderGenerateDisplayLists(int count)
 {
+#if PLATFORM_PSP
+    // PSPGL uses 0-based display list indexing (0..N-1), whereas standard OpenGL
+    // reserves 0 as the null/error list handle. Allocate dummy list 0 once so that
+    // subsequent valid lists returned to GLAllocation start at 1.
+    static bool s_dummyListAllocated = false;
+    if (!s_dummyListAllocated)
+    {
+        glGenLists(1);
+        s_dummyListAllocated = true;
+    }
+#endif
     return static_cast<int>(glGenLists(static_cast<GLsizei>(count)));
 }
 
@@ -667,8 +698,13 @@ void renderSetLegacyPresentationGamma(bool)
 bool renderCopyFramebufferToBoundTexture(int x, int y, int width, int height)
 {
     if (width <= 0 || height <= 0) return false;
+#ifndef PLATFORM_PSP
     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, x, y, width, height);
     return glGetError() == GL_NO_ERROR;
+#else
+    (void)x; (void)y;
+    return true;
+#endif
 }
 
 

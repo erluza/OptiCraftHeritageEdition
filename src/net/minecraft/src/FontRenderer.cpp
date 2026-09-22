@@ -9,7 +9,7 @@
 #include "java/String.h"
 #include "java/Arithmetic.h"
 #include "platform/PlatformConfig.h"
-#if PLATFORM_PC
+#if PLATFORM_PC || PLATFORM_PSP
 #include "GLAllocation.h"
 #endif
 #include "GameSettings.h"

@@ -585,7 +585,7 @@ int_t RenderEngine::getTexture(const std::string &s)
 		setupTexture(missingTextureImage.get(), texture, isTileAtlasResource(s), isTerrainAlphaFixResource(s));
 		if (!renderTextureIsValid(texture))
 		{
-			int_t name = texture;
+			int name = static_cast<int>(texture);
 			renderDeleteTextures(1, &name);
 			return texture;
 		}
@@ -614,7 +614,7 @@ int_t RenderEngine::getTexture(const std::string &s)
 	if (!textureValid)
 	{
 		MC_LOG_DEBUG("render", "getTexture('%s'): upload failed, will retry next bind\n", s.c_str());
-		int_t name = texture;
+		int name = static_cast<int>(texture);
 		renderDeleteTextures(1, &name);
 		return texture;
 	}

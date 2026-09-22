@@ -163,7 +163,7 @@ private:
 #if (PLATFORM_PS2 || PLATFORM_WII) && PLATFORM_CENTER_VERTICAL_RENDERERS
 	bool verticalWindowInitialized = false;
 #endif
-#if PLATFORM_PC
+#if PLATFORM_PC || PLATFORM_PSP
 	int_t glRenderListBase = 0;
 #endif
 	Minecraft *mc = nullptr;

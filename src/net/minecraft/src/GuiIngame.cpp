@@ -1,4 +1,5 @@
 #include "GuiIngame.h"
+#include "mods/ModManager.h"
 #include "platform/PlatformTuning.h"
 #include "platform/Profiler.h"
 #include "java/String.h"
@@ -942,6 +943,7 @@ void GuiIngame::renderGameOverlay(float_t partialTick, bool showDebug, int_t mou
 #if PLATFORM_PROFILE_RENDER_PHASES
 	platformProfileRenderPhaseEnd(cycHudHints, PlatformRenderPhase::HudHints);
 #endif
+	ModManager::getInstance().onRenderGameOverlay(this, sw, sh, partialTick);
 	finishOverlayGLState();
 }
 

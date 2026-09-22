@@ -37,6 +37,14 @@
 #  endif
 #endif
 
+#ifndef PLATFORM_PSP
+#  if defined(PSP_PLATFORM) || defined(PSP) || defined(__PSP__)
+#    define PLATFORM_PSP 1
+#  else
+#    define PLATFORM_PSP 0
+#  endif
+#endif
+
 // User-facing hardware calibration features.
 #ifndef PLATFORM_HAS_CONTROLLER_CALIBRATION
 #  define PLATFORM_HAS_CONTROLLER_CALIBRATION (PLATFORM_PS2 || PLATFORM_WII)
@@ -75,7 +83,7 @@
 #endif
 
 #ifndef PLATFORM_DIRECT_ANALOG_MOVEMENT
-#  define PLATFORM_DIRECT_ANALOG_MOVEMENT PLATFORM_PS2
+#  define PLATFORM_DIRECT_ANALOG_MOVEMENT (PLATFORM_PS2 || PLATFORM_PSP)
 #endif
 
 #ifndef PLATFORM_ASYNC_CHUNK_GENERATION
@@ -87,19 +95,19 @@
 // probe alone is ~520 optional files x several spellings of failed opens on
 // every RenderEngine (re)load -- a FAT directory walk each over USB/SD.
 #ifndef PLATFORM_OPTIFINE_CUSTOM_ANIMATIONS
-#  define PLATFORM_OPTIFINE_CUSTOM_ANIMATIONS (!(PLATFORM_PS2 || PLATFORM_WII))
+#  define PLATFORM_OPTIFINE_CUSTOM_ANIMATIONS (!(PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP))
 #endif
 
 #ifndef PLATFORM_OPTIFINE_RANDOM_MOBS
-#  define PLATFORM_OPTIFINE_RANDOM_MOBS (!(PLATFORM_PS2 || PLATFORM_WII))
+#  define PLATFORM_OPTIFINE_RANDOM_MOBS (!(PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP))
 #endif
 
 #ifndef PLATFORM_OPTIFINE_CUSTOM_FONTS
-#  define PLATFORM_OPTIFINE_CUSTOM_FONTS (!(PLATFORM_PS2 || PLATFORM_WII))
+#  define PLATFORM_OPTIFINE_CUSTOM_FONTS (!(PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP))
 #endif
 
 #ifndef PLATFORM_LOCAL_STATS
-#  define PLATFORM_LOCAL_STATS (PLATFORM_PS2 || PLATFORM_WII)
+#  define PLATFORM_LOCAL_STATS (PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP)
 #endif
 
 #ifndef PLATFORM_ENUMERATE_SAVE_DIRECTORIES
@@ -107,7 +115,7 @@
 #endif
 
 #ifndef PLATFORM_LOCAL_RESOURCES_ONLY
-#  if defined(NO_NETWORK) || PLATFORM_WII
+#  if defined(NO_NETWORK) || PLATFORM_WII || PLATFORM_PSP
 #    define PLATFORM_LOCAL_RESOURCES_ONLY 1
 #  else
 #    define PLATFORM_LOCAL_RESOURCES_ONLY 0
@@ -183,7 +191,7 @@
 #endif
 
 #ifndef PLATFORM_PC
-#  if PLATFORM_PS2 || PLATFORM_WII
+#  if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 #    define PLATFORM_PC 0
 #  else
 #    define PLATFORM_PC 1
@@ -219,7 +227,7 @@
 // What the Wii DID need from the old combined profile is the memory half, which
 // is now PLATFORM_BOUNDED_WORLD below.
 #ifndef PLATFORM_CONSOLE_LOW
-#  if PLATFORM_PS2
+#  if PLATFORM_PS2 || PLATFORM_PSP
 #    define PLATFORM_CONSOLE_LOW 1
 #  else
 #    define PLATFORM_CONSOLE_LOW 0
@@ -311,7 +319,7 @@ declares."
 // This is deliberately NOT tied to PLATFORM_CONSOLE_LOW: it is a backend
 // capability question, not a performance budget.
 #ifndef PLATFORM_FONT_IMMEDIATE
-#  if PLATFORM_PS2 || PLATFORM_WII
+#  if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 #    define PLATFORM_FONT_IMMEDIATE 1
 #  else
 #    define PLATFORM_FONT_IMMEDIATE 0
@@ -352,7 +360,7 @@ declares."
 // where they are aiming. Both console backends feed lwjgl::Mouse from a stick
 // (PS2) or the Wiimote IR pointer (Wii), so the coordinates are already there.
 #ifndef PLATFORM_SOFTWARE_CURSOR
-#  if PLATFORM_PS2 || PLATFORM_WII
+#  if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 #    define PLATFORM_SOFTWARE_CURSOR 1
 #  else
 #    define PLATFORM_SOFTWARE_CURSOR 0
