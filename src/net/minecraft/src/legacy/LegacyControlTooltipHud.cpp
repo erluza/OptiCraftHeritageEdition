@@ -202,9 +202,13 @@ void drawRowImmediate(FontRenderer *font, const PromptRow &row)
 {
     // One batch for the whole row. The cached path below removes this glyph
     // tessellation entirely on PS2; this remains the correctness fallback.
+#if PLATFORM_PSP
+    emitRow(font, row);
+#else
     font->beginTextBatch();
     emitRow(font, row);
     font->endTextBatch();
+#endif
 }
 
 void drawRow(FontRenderer *font, PromptRow &row)

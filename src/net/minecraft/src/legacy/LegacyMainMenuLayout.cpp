@@ -4,6 +4,7 @@
 
 #include "LegacySceneLayout.h"
 #include "LegacyMenuHints.h"
+#include "platform/PlatformConfig.h"
 
 namespace
 {
@@ -14,7 +15,11 @@ constexpr int_t LEGACY_MENU_MIN_BUTTON_HEIGHT = 16;
 
 int_t legacyMainMenuButtonCount(bool hideQuitButton)
 {
+#if PLATFORM_PSP
+    return hideQuitButton ? 4 : 5;
+#else
     return hideQuitButton ? 5 : 6;
+#endif
 }
 
 LegacyMainMenuLayout legacyMainMenuLayout(int_t screenWidth, int_t screenHeight, int_t buttonCount)

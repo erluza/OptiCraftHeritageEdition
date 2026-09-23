@@ -39,6 +39,8 @@ PlatformTextInputSnapshot platformTextInputSnapshot(int port)
     return out;
 }
 
+#include "net/minecraft/src/Minecraft.h"
+
 PlatformGamepadSnapshot platformGamepadSnapshot(int port)
 {
     (void)port;
@@ -47,6 +49,16 @@ PlatformGamepadSnapshot platformGamepadSnapshot(int port)
     out.connected = pad.connected;
     out.leftX = pad.leftX;
     out.leftY = pad.leftY;
+
+    Minecraft *mc = Minecraft::getMinecraft();
+    if (mc != nullptr && mc->currentScreen == nullptr)
+    {
+        if (pad.held & PSP_CTRL_LEFT)  out.rightX -= 1.0f;
+        if (pad.held & PSP_CTRL_RIGHT) out.rightX += 1.0f;
+        if (pad.held & PSP_CTRL_UP)    out.rightY -= 1.0f;
+        if (pad.held & PSP_CTRL_DOWN)  out.rightY += 1.0f;
+    }
+
     return out;
 }
 

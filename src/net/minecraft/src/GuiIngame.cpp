@@ -757,7 +757,7 @@ void GuiIngame::renderGameOverlay(float_t partialTick, bool showDebug, int_t mou
 #else
 	drawTexturedModalRect(sw / 2 - 7, sh / 2 - 7, 0, 0, 16, 16);
 #endif
-	renderDisable(RenderCapability::Blend);
+	renderEnable(RenderCapability::Blend);
 	renderBlendFunc(RenderBlendFactor::SrcAlpha, RenderBlendFactor::OneMinusSrcAlpha);
 	renderColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -765,7 +765,11 @@ void GuiIngame::renderGameOverlay(float_t partialTick, bool showDebug, int_t mou
 
 	if (mc->playerController->shouldDrawHUD())
 	{
-#if PLATFORM_PC_LEGACY
+		renderEnable(RenderCapability::Blend);
+		renderBlendFunc(RenderBlendFactor::SrcAlpha, RenderBlendFactor::OneMinusSrcAlpha);
+#if PLATFORM_PSP
+		renderPlayerStatusHudUncached(sw, hudHeight);
+#elif PLATFORM_PC_LEGACY
 		pcLegacyRenderPlayerStatusHud(sw, hudHeight);
 #elif defined(PS2_PLATFORM)
 		ps2RenderPlayerStatusHud(sw, hudHeight);

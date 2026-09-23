@@ -5,6 +5,8 @@
 #include "net/minecraft/src/GuiButton.h"
 #include "net/minecraft/src/StringTranslate.h"
 
+#include "platform/PlatformConfig.h"
+
 void legacyCreateMainMenuButtons(std::vector<GuiButton *> &controlList, GuiButton *&multiplayerButton,
     int_t screenWidth, int_t screenHeight, bool hideQuitButton)
 {
@@ -24,7 +26,11 @@ void legacyCreateMainMenuButtons(std::vector<GuiButton *> &controlList, GuiButto
 
     StringTranslate *tr = StringTranslate::getInstance();
     addButton(1, "Play Game");
+#if !PLATFORM_PSP
     multiplayerButton = addButton(2, tr->translateKey("menu.multiplayer"));
+#else
+    multiplayerButton = nullptr;
+#endif
     addButton(3, "Mods");
     addButton(0, "Help & Options");
     addButton(5, "Language");

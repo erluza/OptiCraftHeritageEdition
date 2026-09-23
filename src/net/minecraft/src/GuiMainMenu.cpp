@@ -287,7 +287,9 @@ void GuiMainMenu::initGui()
 
     const int_t y = height / 4 + 48;
     controlList.push_back(new GuiButton(1, width / 2 - 100, y, tr->translateKey("menu.singleplayer")));
+#if !PLATFORM_PSP
     controlList.push_back(multiplayerButton = new GuiButton(2, width / 2 - 100, y + 24, tr->translateKey("menu.multiplayer")));
+#endif
     controlList.push_back(new GuiButton(3, width / 2 - 100, y + 48, "Mods"));
 
     if (mc->hideQuitButton)
@@ -302,7 +304,7 @@ void GuiMainMenu::initGui()
 
     controlList.push_back(new GuiButtonLanguage(5, width / 2 - 124, y + 84));
 #if !PLATFORM_PS2
-    if (mc->session == nullptr)
+    if (mc->session == nullptr && multiplayerButton != nullptr)
         multiplayerButton->enabled = false;
 #endif
 }

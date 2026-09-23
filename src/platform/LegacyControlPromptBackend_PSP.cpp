@@ -7,11 +7,11 @@ std::string legacyControlPromptLabel(const GameSettings &settings, LegacyControl
     (void)settings;
     switch (action)
     {
-    case LegacyControlAction::Attack: return "L";
-    case LegacyControlAction::Use: return "R";
-    case LegacyControlAction::Jump: return "D-Up";
-    case LegacyControlAction::Inventory: return "Select";
-    case LegacyControlAction::Drop: return "Triangle";
+    case LegacyControlAction::Attack: return "Square";
+    case LegacyControlAction::Use: return "Circle";
+    case LegacyControlAction::Jump: return "Cross";
+    case LegacyControlAction::Inventory: return "Triangle";
+    case LegacyControlAction::Drop: return "Select";
     }
     return std::string();
 }
