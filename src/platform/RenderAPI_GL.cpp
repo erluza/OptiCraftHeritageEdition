@@ -960,6 +960,10 @@ bool renderDrawInterleaved(const RenderInterleavedMesh& mesh)
         glColorPointer(4, GL_UNSIGNED_BYTE, mesh.stride, pointerForOffset(mesh.colorOffset));
         glEnableClientState(GL_COLOR_ARRAY);
     }
+    else
+    {
+        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    }
     if (mesh.hasNormals)
     {
         glNormalPointer(GL_BYTE, mesh.stride, pointerForOffset(mesh.normalOffset));
@@ -982,7 +986,10 @@ bool renderDrawInterleaved(const RenderInterleavedMesh& mesh)
     }
 #endif
     if (mesh.hasColor)
+    {
         glDisableClientState(GL_COLOR_ARRAY);
+        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    }
     if (mesh.hasNormals)
         glDisableClientState(GL_NORMAL_ARRAY);
 

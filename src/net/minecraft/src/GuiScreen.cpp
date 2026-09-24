@@ -41,9 +41,11 @@ bool menuPointerInputSuppressed(Minecraft *mc)
 	if (mc != nullptr && mc->currentScreen != nullptr && mc->currentScreen->suppressesPlatformPointerInput())
 		return true;
 #endif
-#if PLATFORM_PS2 || PLATFORM_PSP
+#if PLATFORM_PS2
 	return mc != nullptr && mc->gameSettings != nullptr && mc->gameSettings->legacyUI &&
 	       (mc->currentScreen == nullptr || !mc->currentScreen->allowsPlatformPointerInput());
+#elif PLATFORM_PSP
+	return false;
 #elif PLATFORM_WII
 	(void)mc;
 	return !platformMenuPointerActive();
@@ -305,9 +307,6 @@ void GuiScreen::handleInput()
 #if PLATFORM_PS2 || PLATFORM_WII
 	handleConsoleJavaUiNavigation();
 #endif
-#endif
-#if PLATFORM_PSP
-	handleConsoleJavaUiNavigation();
 #endif
 	while (lwjgl::Mouse::next()) handleMouseInput();
 	while (lwjgl::Keyboard::next()) handleKeyboardInput();

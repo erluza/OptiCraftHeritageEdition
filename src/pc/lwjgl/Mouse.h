@@ -53,6 +53,7 @@ int_t getDWheel();
 // Useful after grabbing/ungrabbing the mouse so stale menu or warp deltas
 // do not rotate the camera on the first gameplay frames.
 void clearDeltas();
+void clearEvents();
 
 bool isButtonDown(int_t button);
 

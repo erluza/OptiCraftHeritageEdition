@@ -774,6 +774,8 @@ std::vector<std::string> FontRenderer::split(const std::string &s, char delimite
 
 int_t FontRenderer::getCharIndex(char_t c)
 {
+	if (c >= 32 && c <= 126)
+		return c - 32;
 	return String::indexOfUtf16Unit(ChatAllowedCharacters::allowedCharacters(), c);
 }
 

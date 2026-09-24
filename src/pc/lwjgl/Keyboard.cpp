@@ -1,4 +1,4 @@
-﻿#include "lwjgl/Keyboard.h"
+#include "lwjgl/Keyboard.h"
 
 #include <queue>
 #include <locale>
@@ -394,6 +394,13 @@ bool next()
 	detail::event_current = detail::event_queue.front();
 	detail::event_queue.pop();
 	return true;
+}
+
+void clearEvents()
+{
+	while (!detail::event_queue.empty())
+		detail::event_queue.pop();
+	detail::event_current = {};
 }
 
 void enableRepeatEvents(bool repeat)

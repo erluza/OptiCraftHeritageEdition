@@ -117,15 +117,15 @@ namespace PspPadState
 
                 // Cross: Click / Select
                 if (newlyPressed & PSP_CTRL_CROSS)
-                {
                     lwjgl::Mouse::detail::pushButton(0, true, s_cursorX, s_cursorY);
-                    lwjgl::Keyboard::detail::pushKey(28, true); // Return
-                }
                 if (released & PSP_CTRL_CROSS)
-                {
                     lwjgl::Mouse::detail::pushButton(0, false, s_cursorX, s_cursorY);
-                    lwjgl::Keyboard::detail::pushKey(28, false);
-                }
+
+                // L / R Triggers: Creative menu / Container wheel scrolling
+                if (newlyPressed & PSP_CTRL_LTRIGGER)
+                    lwjgl::Mouse::detail::pushWheel(1, s_cursorX, s_cursorY);
+                if (newlyPressed & PSP_CTRL_RTRIGGER)
+                    lwjgl::Mouse::detail::pushWheel(-1, s_cursorX, s_cursorY);
 
                 // Circle: Back / Cancel / Escape
                 if (newlyPressed & PSP_CTRL_CIRCLE)

@@ -116,6 +116,9 @@
 #include "net/minecraft/src/Tessellator.h"
 #include "net/minecraft/src/legacy/startup/StartupPresentation.h"
 #include "net/minecraft/src/legacy/LegacyDebugOptions.h"
+#if PLATFORM_PSP
+#include "psp/input/PspPadState.h"
+#endif
 
 namespace
 {
@@ -1283,6 +1286,11 @@ void Minecraft::displayGuiScreen(GuiScreen *guiscreen)
             ownedGuiScreens.push_back(guiscreen);
 
         setIngameNotInFocus();
+        lwjgl::Mouse::clearEvents();
+        lwjgl::Keyboard::clearEvents();
+#if PLATFORM_PSP
+        PspPadState::clearLatches();
+#endif
         ScaledResolution scaledresolution(gameSettings, displayWidth, displayHeight);
         int_t i = scaledresolution.getScaledWidth();
         int_t j = scaledresolution.getScaledHeight();

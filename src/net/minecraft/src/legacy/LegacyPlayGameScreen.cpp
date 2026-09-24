@@ -185,7 +185,7 @@ int_t LegacyPlayGameScreen::maxVisibleWorlds() const
     const int_t staticRowsHeight = 2 * base.rowHeight + base.rowSpacing;
     const int_t available = base.panelHeight - playHeaderHeight(height) - playFooterHeight(height) -
         staticRowsHeight;
-    return std::max<int_t>(0, std::min<int_t>(4, (available + base.rowSpacing) /
+    return std::max<int_t>(1, std::min<int_t>(4, (available + base.rowSpacing) /
         (base.rowHeight + base.rowSpacing)));
 }
 

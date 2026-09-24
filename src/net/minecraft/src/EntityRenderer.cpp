@@ -464,7 +464,7 @@ void EntityRenderer::updateLightmap()
         green = std::min(1.0f, green);
         blue = std::min(1.0f, blue);
 
-        #if PLATFORM_PS2
+        #if PLATFORM_PS2 || PLATFORM_PSP
         if (mc->gameSettings != nullptr && mc->gameSettings->legacyLook)
             legacyLookRgb(red, green, blue);
 #endif
@@ -2385,7 +2385,7 @@ void EntityRenderer::updateFogColor(float partialTicks)
         fogColorBlue = static_cast<float>(fogColorBlue * voidFog);
     }
 
-    #if PLATFORM_PS2
+    #if PLATFORM_PS2 || PLATFORM_PSP
     if (mc->gameSettings != nullptr && mc->gameSettings->legacyLook)
         legacyLookRgb(fogColorRed, fogColorGreen, fogColorBlue);
 #endif

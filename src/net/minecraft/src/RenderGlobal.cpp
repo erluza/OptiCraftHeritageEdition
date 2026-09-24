@@ -106,7 +106,7 @@ namespace
 {
 inline void applyPs2LegacyAtmosphereRgb(Minecraft *mc, float &red, float &green, float &blue)
 {
-#if PLATFORM_PS2
+#if PLATFORM_PS2 || PLATFORM_PSP
 	if (mc != nullptr && mc->gameSettings != nullptr && mc->gameSettings->legacyLook)
 		legacyLookRgb(red, green, blue);
 #else
