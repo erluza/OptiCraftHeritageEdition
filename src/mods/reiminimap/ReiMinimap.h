@@ -25,6 +25,10 @@ public:
 
     void addWaypoint(const std::string &name, int_t x, int_t y, int_t z, int_t color = -1);
     const std::vector<Waypoint> &getWaypoints() const { return m_waypoints; }
+    size_t getWaypointCount() const { return m_waypoints.size(); }
+    const Waypoint &getWaypoint(size_t index) const { return m_waypoints[index]; }
+    void toggleWaypoint(size_t index);
+    void removeWaypoint(size_t index);
 
     void saveWaypoints();
     void loadWaypoints();
@@ -53,6 +57,7 @@ private:
     std::vector<Waypoint> m_waypoints;
     bool m_initialized;
     bool m_waypointComboWasPressed[2];
+    bool m_waypointMenuComboWasPressed[2];
     std::string m_toastMessage[2];
     int_t m_toastTimer[2];
     std::string m_currentWorldDir;

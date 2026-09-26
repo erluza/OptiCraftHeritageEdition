@@ -1,4 +1,5 @@
 #include "ReiMinimap.h"
+#include "GuiWaypointManager.h"
 #include "Minecraft.h"
 #include "GuiIngame.h"
 #include "FontRenderer.h"
@@ -89,6 +90,8 @@ ReiMinimap::ReiMinimap()
     m_lastPlayerZ[1] = -999999;
     m_waypointComboWasPressed[0] = false;
     m_waypointComboWasPressed[1] = false;
+    m_waypointMenuComboWasPressed[0] = false;
+    m_waypointMenuComboWasPressed[1] = false;
     m_toastTimer[0] = 0;
     m_toastTimer[1] = 0;
 }
@@ -179,6 +182,16 @@ void ReiMinimap::update()
                 m_mc->sndManager->playSoundFX("random.orb", 1.0f, 1.0f);
         }
         m_waypointComboWasPressed[0] = combo0;
+
+        // Check Pad 0 (Player 1) combo (Triangle + D-Pad Down) to open Waypoint Manager
+        bool menuCombo0 = (pad0.held & PS2_PAD_TRIANGLE) != 0 && (pad0.held & PS2_PAD_DOWN) != 0;
+        if (menuCombo0 && !m_waypointMenuComboWasPressed[0] && m_mc->currentScreen == nullptr)
+        {
+            ps2SetMenuPad(0);
+            ps2SetMenuOwnerPad(0);
+            m_mc->displayGuiScreen(new GuiWaypointManager(0));
+        }
+        m_waypointMenuComboWasPressed[0] = menuCombo0;
     }
 
     // Check Pad 1 (Player 2) combo (Triangle + D-Pad Up) if split screen is active
@@ -201,6 +214,18 @@ void ReiMinimap::update()
                 m_mc->sndManager->playSoundFX("random.orb", 1.0f, 1.0f);
         }
         m_waypointComboWasPressed[1] = combo1;
+
+        // Check Pad 1 (Player 2) combo (Triangle + D-Pad Down) to open Waypoint Manager
+        bool menuCombo1 = (pad1.held & PS2_PAD_TRIANGLE) != 0 && (pad1.held & PS2_PAD_DOWN) != 0;
+        if (menuCombo1 && !m_waypointMenuComboWasPressed[1] && m_mc->currentScreen == nullptr)
+        {
+            m_mc->setScreenOwnedByPlayer2(true);
+            m_mc->thePlayer = p2;
+            ps2SetMenuPad(1);
+            ps2SetMenuOwnerPad(1);
+            m_mc->displayGuiScreen(new GuiWaypointManager(1));
+        }
+        m_waypointMenuComboWasPressed[1] = menuCombo1;
     }
 #endif
 
@@ -583,6 +608,24 @@ void ReiMinimap::addWaypoint(const std::string &name, int_t x, int_t y, int_t z,
         color = getNextWaypointColor();
     m_waypoints.push_back({ name, x, y, z, color, true });
     saveWaypoints();
+}
+
+void ReiMinimap::toggleWaypoint(size_t index)
+{
+    if (index < m_waypoints.size())
+    {
+        m_waypoints[index].enabled = !m_waypoints[index].enabled;
+        saveWaypoints();
+    }
+}
+
+void ReiMinimap::removeWaypoint(size_t index)
+{
+    if (index < m_waypoints.size())
+    {
+        m_waypoints.erase(m_waypoints.begin() + index);
+        saveWaypoints();
+    }
 }
 
 std::string ReiMinimap::getWaypointsFilePath() const

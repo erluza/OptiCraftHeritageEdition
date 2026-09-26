@@ -11,14 +11,24 @@ ScaledResolution::ScaledResolution(GameSettings *gamesettings, int_t i, int_t j)
 {
 	const bool widescreen = gamesettings != nullptr && gamesettings->widescreen;
 	Minecraft *mc = Minecraft::getMinecraft();
-	const bool isSplit = (mc != nullptr && mc->isSplitScreenActive() && j <= 256);
+	const bool verticalSplit = (mc != nullptr && mc->gameSettings != nullptr && mc->gameSettings->splitscreenVertical);
+	const bool isSplit = (mc != nullptr && mc->isSplitScreenActive() && (j <= 256 || (verticalSplit && i <= 320)));
 
 	if (isSplit && widescreen)
 	{
-		// In vertical split-screen, physical height (j) is half of the TV display height (j * 2).
-		// Anamorphic widescreen logical width must be computed from the full TV height,
-		// otherwise the logical width is halved, squashing the HUD horizontally.
-		scaledWidth = ConsoleAspectRatio::getLogicalWidth(i, j * 2, widescreen);
+		if (verticalSplit)
+		{
+			// In vertical split-screen (Left / Right), physical width (i) is half of the TV width.
+			// Compute logical width from full TV width (i * 2) and halve it.
+			scaledWidth = ConsoleAspectRatio::getLogicalWidth(i * 2, j, widescreen) / 2;
+		}
+		else
+		{
+			// In horizontal split-screen (Top / Bottom), physical height (j) is half of the TV display height (j * 2).
+			// Anamorphic widescreen logical width must be computed from the full TV height,
+			// otherwise the logical width is halved, squashing the HUD horizontally.
+			scaledWidth = ConsoleAspectRatio::getLogicalWidth(i, j * 2, widescreen);
+		}
 	}
 	else
 	{

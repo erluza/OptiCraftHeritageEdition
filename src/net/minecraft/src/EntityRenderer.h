@@ -169,6 +169,7 @@ private:
     
     // Renderer de items en mano
     ItemRenderer* itemRenderer;
+    int viewportOffsetX = 0;
     int viewportOffsetY = 0;
 
     // OptiFine: ultimo worldProvider para el que se aplico el brillo; cuando cambia

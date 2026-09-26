@@ -979,9 +979,17 @@ void EntityRenderer::setupCameraTransform(float partialTicks, int anaglyphPass)
         mc->displayWidth, mc->displayHeight, mc->gameSettings->widescreen);
 #endif
 #if defined(PS2_PLATFORM)
-    if (mc->isSplitScreenActive() && mc->thePlayer2 != nullptr && mc->gameSettings->widescreen)
+    if (mc->isSplitScreenActive() && mc->thePlayer2 != nullptr)
     {
-        projectionAspect *= 2.0;
+        const bool verticalSplit = mc->gameSettings != nullptr && mc->gameSettings->splitscreenVertical;
+        if (verticalSplit)
+        {
+            projectionAspect *= 0.5;
+        }
+        else if (mc->gameSettings->widescreen)
+        {
+            projectionAspect *= 2.0;
+        }
     }
 #endif
     
@@ -1485,7 +1493,9 @@ void EntityRenderer::renderSplitScreen(float partialTicks, int64_t renderTimeLim
 
     const int fullW = mc->displayWidth;
     const int fullH = mc->displayHeight;
-    const int halfH = fullH / 2;
+    const bool verticalSplit = mc->gameSettings != nullptr && mc->gameSettings->splitscreenVertical;
+    const int viewW = verticalSplit ? (fullW / 2) : fullW;
+    const int viewH = verticalSplit ? fullH : (fullH / 2);
 
     MovingObjectPosition *hr1 = nullptr;
 
@@ -1494,13 +1504,15 @@ void EntityRenderer::renderSplitScreen(float partialTicks, int64_t renderTimeLim
         EntityPlayerSP *lp = (i == 0) ? p1 : p2;
         mc->thePlayer = lp;
         mc->renderViewEntity = lp;
-        mc->displayHeight = halfH;
-        viewportOffsetY = i * halfH;
+        mc->displayWidth = viewW;
+        mc->displayHeight = viewH;
+        viewportOffsetX = verticalSplit ? (i * viewW) : 0;
+        viewportOffsetY = verticalSplit ? 0 : (i * viewH);
 
         if (itemRenderer != nullptr)
             itemRenderer->refreshItem();
 
-        renderViewport(0, viewportOffsetY, fullW, halfH);
+        renderViewport(viewportOffsetX, viewportOffsetY, viewW, viewH);
 
         getMouseOver(partialTicks);
         if (i == 0)
@@ -1533,7 +1545,9 @@ void EntityRenderer::renderSplitScreen(float partialTicks, int64_t renderTimeLim
         }
     }
 
+    viewportOffsetX = 0;
     viewportOffsetY = 0;
+    mc->displayWidth = fullW;
     mc->displayHeight = fullH;
     mc->thePlayer = entryPlayer;
     mc->renderViewEntity = p1;
@@ -1541,13 +1555,21 @@ void EntityRenderer::renderSplitScreen(float partialTicks, int64_t renderTimeLim
 
     renderViewport(0, 0, fullW, fullH);
 
-    // Render 2px black horizontal split divider bar
+    // Render 2px black divider bar between player viewports
     setupOverlayRendering();
     ScaledResolution fullResolution(mc->gameSettings, fullW, fullH);
     int guiW = fullResolution.getScaledWidth();
     int guiH = fullResolution.getScaledHeight();
-    int midY = guiH / 2;
-    Gui::drawRect(0, midY - 1, guiW, midY + 1, 0xFF000000);
+    if (verticalSplit)
+    {
+        int midX = guiW / 2;
+        Gui::drawRect(midX - 1, 0, midX + 1, guiH, 0xFF000000);
+    }
+    else
+    {
+        int midY = guiH / 2;
+        Gui::drawRect(0, midY - 1, guiW, midY + 1, 0xFF000000);
+    }
 }
 
 void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano)
@@ -1627,7 +1649,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
             }
         }
         
-        renderViewport(0, viewportOffsetY, mc->displayWidth, mc->displayHeight);
+        renderViewport(viewportOffsetX, viewportOffsetY, mc->displayWidth, mc->displayHeight);
         
         updateFogColor(partialTicks);
 
@@ -2346,7 +2368,7 @@ void EntityRenderer::renderRainSnow(float partialTicks)
 void EntityRenderer::setupOverlayRendering()
 {
     ScaledResolution scaledResolution(mc->gameSettings, mc->displayWidth, mc->displayHeight);
-	renderViewport(0, viewportOffsetY, mc->displayWidth, mc->displayHeight);
+	renderViewport(viewportOffsetX, viewportOffsetY, mc->displayWidth, mc->displayHeight);
 
     // Note for the Wii port: disabling GL_LIGHTING and GL_FOG here was tried, on
     // the theory that the native console lit pipeline (two colour channels, no normals in
