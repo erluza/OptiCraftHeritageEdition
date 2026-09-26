@@ -49,9 +49,10 @@ ScaledResolution::ScaledResolution(GameSettings *gamesettings, int_t i, int_t j)
 			else
 			{
 				// In horizontal split-screen (Top / Bottom), vertical height is halved (~224 physical px).
-				// 58% scale factor (~1.16 exact scale) provides ~193 logical height, comfortably fitting
-				// the 166px tall inventory window without vertical clipping.
-				exactScaleFactor = PLATFORM_LEGACY_GUI_SCALE * 0.58;
+				// 50% scale factor (1.0 exact scale) provides 224 logical height, comfortably fitting
+				// the 222px tall double chest and 166px inventory without vertical clipping,
+				// while rendering all GUI textures with 1:1 pixel perfection.
+				exactScaleFactor = PLATFORM_LEGACY_GUI_SCALE * 0.50;
 			}
 		}
 		else

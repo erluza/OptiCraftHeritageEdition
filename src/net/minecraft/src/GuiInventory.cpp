@@ -37,7 +37,10 @@ void GuiInventory::initGui()
 	EntityPlayer *p = inventoryPlayer ? inventoryPlayer : (mc ? mc->thePlayer : nullptr);
 	if (mc->playerController->isInCreativeMode())
 	{
-		mc->displayGuiScreen(new GuiContainerCreative(p ? p : mc->thePlayer));
+		if (mc != nullptr && mc->isSplitScreenActive())
+			mc->displayPlayerScreen(getOwnerPlayerIndex(), new GuiContainerCreative(p ? p : mc->thePlayer));
+		else
+			mc->displayGuiScreen(new GuiContainerCreative(p ? p : mc->thePlayer));
 		return;
 	}
 
