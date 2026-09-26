@@ -67,8 +67,12 @@ public:
 	virtual void selectNextField();
 	void notifyTextFieldFocus(GuiTextField *field, bool focused);
 
+	void setOwnerPlayerIndex(int idx) { m_ownerPlayerIndex = idx; }
+	virtual int getOwnerPlayerIndex() const;
+
 protected:
 	Minecraft *mc;
+	int m_ownerPlayerIndex;
 
 public:
 	int_t width;

@@ -219,8 +219,15 @@ void GuiWaypointManager::closeScreen()
     {
         if (mc->sndManager != nullptr)
             mc->sndManager->playSoundFX("random.back", 1.0f, 1.0f);
-        mc->displayGuiScreen(nullptr);
-        mc->setIngameFocus();
+        if (mc->isSplitScreenActive() && m_playerIndex >= 0)
+        {
+            mc->closePlayerScreen(m_playerIndex);
+        }
+        else
+        {
+            mc->displayGuiScreen(nullptr);
+            mc->setIngameFocus();
+        }
     }
 }
 

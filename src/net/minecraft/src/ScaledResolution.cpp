@@ -41,9 +41,18 @@ ScaledResolution::ScaledResolution(GameSettings *gamesettings, int_t i, int_t j)
 	{
 		if (isSplit)
 		{
-			// Adapt HUD scale in split-screen (70% of legacy scale = 1.4) so health, hunger,
-			// hotbar, and button tooltips leave ample field of view on both 4:3 and 16:9 displays.
-			exactScaleFactor = PLATFORM_LEGACY_GUI_SCALE * 0.70;
+			if (verticalSplit)
+			{
+				// In vertical split-screen (Left / Right), full vertical height (320 logical px) is available.
+				exactScaleFactor = PLATFORM_LEGACY_GUI_SCALE * 0.70;
+			}
+			else
+			{
+				// In horizontal split-screen (Top / Bottom), vertical height is halved (~224 physical px).
+				// 58% scale factor (~1.16 exact scale) provides ~193 logical height, comfortably fitting
+				// the 166px tall inventory window without vertical clipping.
+				exactScaleFactor = PLATFORM_LEGACY_GUI_SCALE * 0.58;
+			}
 		}
 		else
 		{

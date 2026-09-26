@@ -10,6 +10,7 @@
 #include "net/minecraft/src/WorldProvider.h"
 #include "net/minecraft/src/Session.h"
 #include "net/minecraft/src/MovementInputFromOptions.h"
+#include "net/minecraft/src/GameSettings.h"
 #include "net/minecraft/src/skin/SkinManager.h"
 #include "net/minecraft/src/GuiInventory.h"
 #include "net/minecraft/src/GuiIngame.h"
@@ -120,6 +121,8 @@ void joinPlayer2(Minecraft *mc)
 
     mc->thePlayer2 = p2;
     mc->setSplitScreenActive(true);
+    if (mc->gameSettings != nullptr)
+        mc->gameSettings->thirdPersonView = 0;
 
     if (mc->sndManager != nullptr)
         mc->sndManager->playSoundFX("random.levelup", 1.0f, 1.0f);
@@ -162,6 +165,9 @@ void leavePlayer2(Minecraft *mc)
 
     if (mc->thePlayerOne != nullptr)
         mc->thePlayer = mc->thePlayerOne;
+
+    if (mc->getPlayerScreen(1) != nullptr)
+        mc->closePlayerScreen(1);
 
     mc->setSplitScreenActive(false);
     mc->setScreenOwnedByPlayer2(false);
@@ -235,43 +241,47 @@ void tick(Minecraft *mc)
         return;
     }
 
-    // Hotbar selection
-    if (p2->inventory != nullptr)
+    // Personal screen closing for Player 2
+    if (mc->isPlayerScreenActive(1))
+    {
+        if (tickPressed & PS2_PAD_CIRCLE)
+        {
+            mc->closePlayerScreen(1);
+            return;
+        }
+        if (tickPressed & PS2_PAD_SQUARE)
+        {
+            if (dynamic_cast<GuiInventory *>(mc->getPlayerScreen(1)) != nullptr)
+            {
+                mc->closePlayerScreen(1);
+                return;
+            }
+        }
+    }
+
+    // Square button: Open P2 Inventory independently
+    if (tickPressed & PS2_PAD_SQUARE)
+    {
+        if (mc->currentScreen == nullptr && !mc->isPlayerScreenActive(1))
+        {
+            mc->displayPlayerScreen(1, new GuiInventory(p2));
+            return;
+        }
+    }
+
+    // Hotbar selection and item dropping (only when no menu is open for Player 2)
+    if (p2->inventory != nullptr && mc->currentScreen == nullptr && !mc->isPlayerScreenActive(1))
     {
         if (tickPressed & PS2_PAD_R1)
             p2->inventory->currentItem = (p2->inventory->currentItem + 1) % 9;
         if (tickPressed & PS2_PAD_L1)
             p2->inventory->currentItem = (p2->inventory->currentItem + 8) % 9;
-        if (mc->currentScreen == nullptr && (tickPressed & PS2_PAD_TRIANGLE))
+        if (tickPressed & PS2_PAD_TRIANGLE)
             p2->dropOneItem();
     }
 
-    // Square button: Open P2 Inventory
-    if (tickPressed & PS2_PAD_SQUARE)
-    {
-        if (mc->currentScreen == nullptr)
-        {
-            mc->setScreenOwnedByPlayer2(true);
-            mc->thePlayer = p2;
-            ps2SetMenuPad(1);
-            ps2SetMenuOwnerPad(1);
-            mc->displayGuiScreen(new GuiInventory(p2));
-            return;
-        }
-        else if (!mc->isScreenOwnedByPlayer2())
-        {
-            if (mc->ingameGUI != nullptr)
-            {
-                if (isSpanishLanguage())
-                    mc->ingameGUI->addChatMessage("\xc2\xa7" "c[P2] Turno ocupado por Jugador 1");
-                else
-                    mc->ingameGUI->addChatMessage("\xc2\xa7" "c[P2] Menu in use by Player 1");
-            }
-        }
-    }
-
     // Skip world interaction while a menu is open
-    if (mc->currentScreen != nullptr)
+    if (mc->currentScreen != nullptr || mc->isPlayerScreenActive(1))
         return;
 
     // Build / Attack / Use actions for Player 2

@@ -31,14 +31,54 @@
 
 RenderItem *GuiContainer::itemRenderer = new RenderItem();
 
-GuiContainer::GuiContainer(Container *container, bool ownsContainer)
+GuiContainer::GuiContainer(Container *container, bool ownsContainer, EntityPlayer *player)
 	: xSize(176)
 	, ySize(166)
 	, guiLeft(0)
 	, guiTop(0)
+	, m_containerPlayer(player)
 	, inventorySlots(container)
 	, ownsInventorySlots(ownsContainer)
 {
+	if (player != nullptr)
+	{
+		Minecraft *m = Minecraft::getMinecraft();
+		if (m != nullptr && player == m->thePlayer2)
+			m_ownerPlayerIndex = 1;
+		else
+			m_ownerPlayerIndex = 0;
+	}
+}
+
+EntityPlayer *GuiContainer::getContainerPlayer() const
+{
+	if (m_containerPlayer != nullptr)
+		return m_containerPlayer;
+	return mc ? mc->thePlayer : nullptr;
+}
+
+void GuiContainer::setContainerPlayer(EntityPlayer *player)
+{
+	m_containerPlayer = player;
+	if (player != nullptr)
+	{
+		Minecraft *m = Minecraft::getMinecraft();
+		if (m != nullptr && player == m->thePlayer2)
+			m_ownerPlayerIndex = 1;
+		else
+			m_ownerPlayerIndex = 0;
+	}
+}
+
+int GuiContainer::getOwnerPlayerIndex() const
+{
+	if (m_ownerPlayerIndex >= 0)
+		return m_ownerPlayerIndex;
+	if (m_containerPlayer != nullptr && mc != nullptr && m_containerPlayer == mc->thePlayer2)
+		return 1;
+	if (mc != nullptr && mc->isScreenOwnedByPlayer2())
+		return 1;
+	return 0;
 }
 
 GuiContainer::~GuiContainer()
@@ -48,7 +88,7 @@ GuiContainer::~GuiContainer()
 	// destroyed while it is still the one the navigator points at (world change,
 	// shutdown), and that pointer is read from the pad poll rather than from a
 	// tick -- so it has to stop being live here too.
-	ContainerSlotNavigator::instance().notifyClosed(this);
+	ContainerSlotNavigator::instance(getOwnerPlayerIndex()).notifyClosed(this);
 #endif
 
 	if (ownsInventorySlots)
@@ -63,7 +103,9 @@ void GuiContainer::initGui()
 	GuiScreen::initGui();
 	guiLeft = (width - xSize) / 2;
 	guiTop = (height - ySize) / 2;
-	mc->thePlayer->craftingInventory = inventorySlots;
+	EntityPlayer *p = getContainerPlayer();
+	if (p != nullptr)
+		p->craftingInventory = inventorySlots;
 }
 
 void GuiContainer::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
@@ -73,7 +115,7 @@ void GuiContainer::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
 	int_t guiY = guiTop;
 
 #if defined(PS2_PLATFORM) || defined(WII_PLATFORM)
-	ContainerSlotNavigator &navigator = ContainerSlotNavigator::instance();
+	ContainerSlotNavigator &navigator = ContainerSlotNavigator::instance(getOwnerPlayerIndex());
 	Slot *controllerSlot = nullptr;
 	if (mc->gameSettings != nullptr && mc->gameSettings->legacyUI)
 	{
@@ -144,7 +186,8 @@ void GuiContainer::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
 		}
 	}
 
-	InventoryPlayer *inv = mc->thePlayer->inventory;
+	EntityPlayer *cp = getContainerPlayer();
+	InventoryPlayer *inv = (cp != nullptr) ? cp->inventory : mc->thePlayer->inventory;
 	if (inv->getItemStack() != nullptr)
 	{
 		int_t carriedX = mouseX - guiX - 8;
@@ -243,7 +286,7 @@ void GuiContainer::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
 
 	// Splitscreen Turn-Based Inventory Ownership Banner
 	// Displays high-visibility badge showing which player currently owns the active inventory screen
-	if (mc != nullptr && mc->theWorld != nullptr && (mc->theWorld->isLimitedWorld() || mc->isSplitScreenActive() || mc->isScreenOwnedByPlayer2()))
+	if (mc != nullptr && mc->theWorld != nullptr && !mc->isSplitScreenActive() && (mc->theWorld->isLimitedWorld() || mc->isScreenOwnedByPlayer2()))
 	{
 		renderDisable(RenderCapability::Lighting);
 		renderDisable(RenderCapability::DepthTest);
@@ -348,7 +391,7 @@ bool GuiContainer::getIsMouseOverSlot(Slot *slot, int_t mouseX, int_t mouseY)
 void GuiContainer::mouseClicked(int_t x, int_t y, int_t button)
 {
 #if PLATFORM_PS2 || PLATFORM_WII
-	ContainerSlotNavigator &navigator = ContainerSlotNavigator::instance();
+	ContainerSlotNavigator &navigator = ContainerSlotNavigator::instance(getOwnerPlayerIndex());
 	// Console confirm buttons are exposed both as controller input and mouse
 	// clicks. When D-pad selection owns the inventory, ignore the synthesized
 	// mouse edge so the selected slot is activated exactly once.
@@ -383,7 +426,8 @@ void GuiContainer::handleMouseClick(Slot *slot, int_t slotId, int_t button, bool
 {
 	if (slot != nullptr)
 		slotId = slot->slotNumber;
-	delete mc->playerController->windowClick(inventorySlots->windowId, slotId, button, shift, mc->thePlayer);
+	EntityPlayer *p = getContainerPlayer();
+	delete mc->playerController->windowClick(inventorySlots->windowId, slotId, button, shift, p ? p : mc->thePlayer);
 }
 
 void GuiContainer::mouseMovedOrUp(int_t x, int_t y, int_t button)
@@ -392,7 +436,7 @@ void GuiContainer::mouseMovedOrUp(int_t x, int_t y, int_t button)
 	// Button release is not pointer motion. Only actual movement should take
 	// authority away from the controller-selected slot.
 	if (button < 0)
-		ContainerSlotNavigator::instance().notePointerActivity();
+		ContainerSlotNavigator::instance(getOwnerPlayerIndex()).notePointerActivity();
 #endif
 	(void)x;
 	(void)y;
@@ -406,7 +450,11 @@ void GuiContainer::keyTyped(char_t c, int_t key)
 
 	if (key == 1 || key == mc->gameSettings->keyBindInventory->keyCode)
 	{
-		mc->thePlayer->closeScreen();
+		EntityPlayer *p = getContainerPlayer();
+		if (p != nullptr)
+			p->closeScreen();
+		else
+			mc->thePlayer->closeScreen();
 	}
 }
 
@@ -415,12 +463,14 @@ void GuiContainer::onGuiClosed()
 #if defined(PS2_PLATFORM) || defined(WII_PLATFORM)
 	// Before the thePlayer guard below: the navigator has to be released even on
 	// the paths that return early here.
-	ContainerSlotNavigator::instance().notifyClosed(this);
+	ContainerSlotNavigator::instance(getOwnerPlayerIndex()).notifyClosed(this);
 #endif
 
-	if (mc->thePlayer == nullptr) return;
-	inventorySlots->onCraftGuiClosed(mc->thePlayer);
-	mc->playerController->closeWindow(inventorySlots->windowId, mc->thePlayer);
+	EntityPlayer *p = getContainerPlayer();
+	if (p == nullptr) p = mc->thePlayer;
+	if (p == nullptr) return;
+	inventorySlots->onCraftGuiClosed(p);
+	mc->playerController->closeWindow(inventorySlots->windowId, p);
 }
 
 bool GuiContainer::doesGuiPauseGame()
@@ -431,8 +481,10 @@ bool GuiContainer::doesGuiPauseGame()
 void GuiContainer::updateScreen()
 {
 	GuiScreen::updateScreen();
-	if (!mc->thePlayer->isEntityAlive() || mc->thePlayer->isDead)
+	EntityPlayer *p = getContainerPlayer();
+	if (p == nullptr) p = mc->thePlayer;
+	if (p != nullptr && (!p->isEntityAlive() || p->isDead))
 	{
-		mc->thePlayer->closeScreen();
+		p->closeScreen();
 	}
 }

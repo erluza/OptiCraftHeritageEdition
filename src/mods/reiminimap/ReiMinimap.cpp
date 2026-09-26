@@ -187,9 +187,19 @@ void ReiMinimap::update()
         bool menuCombo0 = (pad0.held & PS2_PAD_TRIANGLE) != 0 && (pad0.held & PS2_PAD_DOWN) != 0;
         if (menuCombo0 && !m_waypointMenuComboWasPressed[0] && m_mc->currentScreen == nullptr)
         {
-            ps2SetMenuPad(0);
-            ps2SetMenuOwnerPad(0);
-            m_mc->displayGuiScreen(new GuiWaypointManager(0));
+            if (isSplit)
+            {
+                if (m_mc->isPlayerScreenActive(0))
+                    m_mc->closePlayerScreen(0);
+                else
+                    m_mc->displayPlayerScreen(0, new GuiWaypointManager(0));
+            }
+            else
+            {
+                ps2SetMenuPad(0);
+                ps2SetMenuOwnerPad(0);
+                m_mc->displayGuiScreen(new GuiWaypointManager(0));
+            }
         }
         m_waypointMenuComboWasPressed[0] = menuCombo0;
     }
@@ -219,11 +229,10 @@ void ReiMinimap::update()
         bool menuCombo1 = (pad1.held & PS2_PAD_TRIANGLE) != 0 && (pad1.held & PS2_PAD_DOWN) != 0;
         if (menuCombo1 && !m_waypointMenuComboWasPressed[1] && m_mc->currentScreen == nullptr)
         {
-            m_mc->setScreenOwnedByPlayer2(true);
-            m_mc->thePlayer = p2;
-            ps2SetMenuPad(1);
-            ps2SetMenuOwnerPad(1);
-            m_mc->displayGuiScreen(new GuiWaypointManager(1));
+            if (m_mc->isPlayerScreenActive(1))
+                m_mc->closePlayerScreen(1);
+            else
+                m_mc->displayPlayerScreen(1, new GuiWaypointManager(1));
         }
         m_waypointMenuComboWasPressed[1] = menuCombo1;
     }

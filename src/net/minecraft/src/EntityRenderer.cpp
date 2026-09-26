@@ -61,6 +61,9 @@
 #include "platform/ExtendedProfiler.h"
 #include "Profiler.h"
 #include "platform/RenderTerrainAPI.h"
+#if PLATFORM_PS2
+#include "ps2/input/Ps2PadState.h"
+#endif
 
 // GLU replacement para gluPerspective
 #include <algorithm>
@@ -846,7 +849,7 @@ void EntityRenderer::orientCamera(float partialTicks)
                       -1.0f, 0.0f, 0.0f);
         }
     }
-    else if (mc->gameSettings->thirdPersonView)
+    else if (mc->gameSettings->thirdPersonView && !mc->isSplitScreenActive())
     {
 #if PLATFORM_FLOAT_VERTEX_MATH
         float camDist = prevCameraDistance + (cameraDistance - prevCameraDistance) * partialTicks;
@@ -1254,7 +1257,7 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
         if (cameraDt > PLATFORM_DIRECT_CAMERA_MAX_DT) cameraDt = PLATFORM_DIRECT_CAMERA_MAX_DT;
 
         const PlatformGamepadSnapshot pad = platformGamepadSnapshot(0);
-        if (pad.connected)
+        if (pad.connected && !mc->isPlayerScreenActive(0))
         {
             const float rx = pad.rightX;
             const float ry = pad.rightY;
@@ -1283,7 +1286,7 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
         if (mc->isSplitScreenActive() && mc->thePlayer2 != nullptr)
         {
             const PlatformGamepadSnapshot pad2 = platformGamepadSnapshot(1);
-            if (pad2.connected)
+            if (pad2.connected && !mc->isPlayerScreenActive(1))
             {
                 const float rx2 = pad2.rightX;
                 const float ry2 = pad2.rightY;
@@ -1529,7 +1532,7 @@ void EntityRenderer::renderSplitScreen(float partialTicks, int64_t renderTimeLim
 
         renderWorld(partialTicks, renderTimeLimitNano);
 
-        if (!mc->gameSettings->hideGUI || mc->currentScreen != nullptr)
+        if (!mc->gameSettings->hideGUI || mc->currentScreen != nullptr || mc->getPlayerScreen(i) != nullptr)
         {
             setupOverlayRendering();
             ScaledResolution scaledResolution(mc->gameSettings, mc->displayWidth, mc->displayHeight);
@@ -1542,6 +1545,25 @@ void EntityRenderer::renderSplitScreen(float partialTicks, int64_t renderTimeLim
 
             mc->ingameGUI->renderGameOverlay(partialTicks, mc->currentScreen != nullptr,
                                              scaledMouseX, scaledMouseY);
+
+            GuiScreen *pScreen = mc->getPlayerScreen(i);
+            if (pScreen != nullptr)
+            {
+#if PLATFORM_GUI_FORCE_DEPTH_DISABLED
+                renderDisable(RenderCapability::DepthTest);
+#endif
+                renderClear(RenderClearMask::Depth);
+
+#if PLATFORM_PS2
+                ps2SetMenuPad(i);
+#endif
+                pScreen->drawScreen(scaledMouseX, scaledMouseY, partialTicks);
+
+                if (pScreen->guiParticles != nullptr)
+                {
+                    pScreen->guiParticles->renderParticles(partialTicks);
+                }
+            }
         }
     }
 

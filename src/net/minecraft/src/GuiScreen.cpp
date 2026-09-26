@@ -132,7 +132,17 @@ GuiScreen::GuiScreen()
 	, selectedButton(nullptr)
 	, keyboardSelectedControlIndex(-1)
 	, focusedTextField(nullptr)
+	, m_ownerPlayerIndex(-1)
 {
+}
+
+int GuiScreen::getOwnerPlayerIndex() const
+{
+	if (m_ownerPlayerIndex >= 0)
+		return m_ownerPlayerIndex;
+	if (mc != nullptr && mc->isScreenOwnedByPlayer2())
+		return 1;
+	return 0;
 }
 
 GuiScreen::~GuiScreen()
@@ -309,11 +319,16 @@ void GuiScreen::handleInput()
 	// Minecraft screen classes.
 	VirtualKeyboard::instance().tick();
 	if (!platformTextInputExclusive())
-		ContainerSlotNavigator::instance().tick();
+		ContainerSlotNavigator::instance(getOwnerPlayerIndex()).tick();
 #if PLATFORM_PS2 || PLATFORM_WII
 	handleConsoleJavaUiNavigation();
 #endif
 #endif
+	if (getOwnerPlayerIndex() == 1)
+	{
+		// Player 2 local screen uses direct Pad 1 inputs only; do not consume Pad 0 lwjgl events
+		return;
+	}
 	while (lwjgl::Mouse::next()) handleMouseInput();
 	while (lwjgl::Keyboard::next()) handleKeyboardInput();
 }

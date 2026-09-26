@@ -23,10 +23,15 @@ int_t absInt(int_t value)
 }
 }
 
-ContainerSlotNavigator& ContainerSlotNavigator::instance()
+ContainerSlotNavigator& ContainerSlotNavigator::instance(int padPort)
 {
-    static ContainerSlotNavigator s_navigator;
-    return s_navigator;
+    static ContainerSlotNavigator s_navigators[2];
+    if (padPort < 0)
+        padPort = platformMenuPad();
+    if (padPort < 0 || padPort >= 2)
+        padPort = 0;
+    s_navigators[padPort].m_padPort = padPort;
+    return s_navigators[padPort];
 }
 
 void ContainerSlotNavigator::notifyOpen(GuiContainer *guiContainer, const Layout &guiLayout)
@@ -62,7 +67,8 @@ void ContainerSlotNavigator::notifyClosed(const GuiContainer *guiContainer)
     pendingPrimary = false;
     pendingSecondary = false;
     nextRepeatMs = 0;
-    platformSetContainerNavigationActive(false);
+    if (!instance(0).isActive() && !instance(1).isActive())
+        platformSetContainerNavigationActive(false);
 }
 
 void ContainerSlotNavigator::repairSelection()
@@ -124,8 +130,11 @@ void ContainerSlotNavigator::moveMenuCursorToSelection()
     const int_t guiX = layout.guiLeft + selected->xDisplayPosition + SLOT_CENTER;
     const int_t guiY = layout.guiTop + selected->yDisplayPosition + SLOT_CENTER;
     ignorePointerMotionOnce = platformMenuPointerActive();
-    platformSetMenuCursor(guiX * layout.displayWidth / layout.screenWidth,
-                          guiY * layout.displayHeight / layout.screenHeight);
+    if (m_padPort == 0)
+    {
+        platformSetMenuCursor(guiX * layout.displayWidth / layout.screenWidth,
+                              guiY * layout.displayHeight / layout.screenHeight);
+    }
 }
 
 void ContainerSlotNavigator::notePointerSlot(Slot *slot)
@@ -216,7 +225,7 @@ void ContainerSlotNavigator::tick()
         clearControllerSelection();
 #endif
 
-    const PlatformTextInputSnapshot pad = platformTextInputSnapshot(platformMenuPad());
+    const PlatformTextInputSnapshot pad = platformTextInputSnapshot(m_padPort);
     if (!pad.connected)
         return;
 

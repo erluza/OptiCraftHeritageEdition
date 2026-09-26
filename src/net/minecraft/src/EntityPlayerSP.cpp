@@ -292,6 +292,19 @@ void EntityPlayerSP::readEntityFromNBT(NBTTagCompound *nbttagcompound)
 void EntityPlayerSP::closeScreen()
 {
 	EntityPlayer::closeScreen();
+	if (mc != nullptr && mc->isSplitScreenActive())
+	{
+		if (this == mc->thePlayer2)
+		{
+			mc->closePlayerScreen(1);
+			return;
+		}
+		else if (mc->isPlayerScreenActive(0))
+		{
+			mc->closePlayerScreen(0);
+			return;
+		}
+	}
 	mc->displayGuiScreen(nullptr);
 }
 

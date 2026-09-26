@@ -126,6 +126,11 @@ public:
     bool isSplitScreenActive() const;
     void setSplitScreenActive(bool val);
 
+    void displayPlayerScreen(int playerIndex, GuiScreen *screen);
+    GuiScreen *getPlayerScreen(int playerIndex) const;
+    void closePlayerScreen(int playerIndex);
+    bool isPlayerScreenActive(int playerIndex) const;
+
     void clickMouse(int_t i, bool flag);
     void clickMouse(int_t i);
     void clickMiddleMouseButton();
@@ -199,6 +204,7 @@ public:
     bool isRaining;
     bool screenOwnedByPlayer2;
     bool splitScreenActive;
+    GuiScreen *playerScreens[2];
 #if !PLATFORM_PS2
     SDL_Window *window;
 #endif

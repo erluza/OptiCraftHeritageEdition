@@ -6,14 +6,19 @@ class Container;
 class Slot;
 class RenderItem;
 class InventoryPlayer;
+class EntityPlayer;
 
 // net.minecraft.src.GuiContainer
 class GuiContainer : public GuiScreen
 {
 	friend class TooManyItems;
 public:
-	GuiContainer(Container *container, bool ownsContainer = false);
+	GuiContainer(Container *container, bool ownsContainer = false, EntityPlayer *player = nullptr);
 	virtual ~GuiContainer();
+
+	EntityPlayer *getContainerPlayer() const;
+	void setContainerPlayer(EntityPlayer *player);
+	int getOwnerPlayerIndex() const override;
 
 	void initGui() override;
 	void drawScreen(int_t mouseX, int_t mouseY, float_t partialTick) override;
@@ -58,6 +63,7 @@ protected:
 	int_t ySize;
 	int_t guiLeft;
 	int_t guiTop;
+	EntityPlayer *m_containerPlayer;
 
 public:
 	Container *inventorySlots;

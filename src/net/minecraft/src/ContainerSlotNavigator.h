@@ -20,7 +20,10 @@ public:
         int_t displayHeight = 0;
     };
 
-    static ContainerSlotNavigator& instance();
+    static ContainerSlotNavigator& instance(int padPort = -1);
+
+    int getPadPort() const { return m_padPort; }
+    void setPadPort(int port) { m_padPort = port; }
 
     void notifyOpen(GuiContainer *screen, const Layout &layout);
     void notifyClosed(const GuiContainer *screen);
@@ -55,6 +58,7 @@ private:
     bool pendingPrimary = false;
     bool pendingSecondary = false;
     int nextRepeatMs = 0;
+    int m_padPort = 0;
 };
 
 #endif // PS2_PLATFORM || WII_PLATFORM
