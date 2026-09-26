@@ -6,6 +6,7 @@
 #include "net/minecraft/src/EntityPlayerSP.h"
 #include "net/minecraft/src/World.h"
 #include "net/minecraft/src/WorldInfo.h"
+#include "net/minecraft/src/NBTTagCompound.h"
 #include "net/minecraft/src/WorldProvider.h"
 #include "net/minecraft/src/Session.h"
 #include "net/minecraft/src/MovementInputFromOptions.h"
@@ -70,15 +71,50 @@ void joinPlayer2(Minecraft *mc)
         p2->setEntityTexture(skinP2);
     }
 
-    p2->setLocationAndAngles(
-        mc->thePlayer->posX + 1.0,
-        mc->thePlayer->posY,
-        mc->thePlayer->posZ + 1.0,
-        mc->thePlayer->rotationYaw,
-        mc->thePlayer->rotationPitch
-    );
+    bool loadedSavedData = false;
+    if (mc->theWorld != nullptr && mc->theWorld->getWorldInfo() != nullptr)
+    {
+        NBTTagCompound *p2Tag = mc->theWorld->getWorldInfo()->getPlayer2NBTTagCompound();
+        if (p2Tag != nullptr)
+        {
+            p2->readFromNBT(p2Tag);
+            loadedSavedData = true;
+            if (!skinP2.empty())
+            {
+                p2->skinUrl = "";
+                p2->setEntityTexture(skinP2);
+            }
+        }
+    }
 
-    p2->capabilities = mc->thePlayer->capabilities;
+    if (!loadedSavedData)
+    {
+        p2->setLocationAndAngles(
+            mc->thePlayer->posX + 1.0,
+            mc->thePlayer->posY,
+            mc->thePlayer->posZ + 1.0,
+            mc->thePlayer->rotationYaw,
+            mc->thePlayer->rotationPitch
+        );
+        p2->capabilities = mc->thePlayer->capabilities;
+    }
+    else
+    {
+        double dx = p2->posX - mc->thePlayer->posX;
+        double dz = p2->posZ - mc->thePlayer->posZ;
+        double distSq = dx * dx + dz * dz;
+        if (p2->dimension != mc->thePlayer->dimension || distSq > (SPLITSCREEN_MAX_DIST * SPLITSCREEN_MAX_DIST))
+        {
+            p2->dimension = mc->thePlayer->dimension;
+            p2->setLocationAndAngles(
+                mc->thePlayer->posX + 1.0,
+                mc->thePlayer->posY,
+                mc->thePlayer->posZ + 1.0,
+                mc->thePlayer->rotationYaw,
+                mc->thePlayer->rotationPitch
+            );
+        }
+    }
 
     mc->theWorld->spawnEntityInWorld(p2);
 
@@ -110,6 +146,12 @@ void leavePlayer2(Minecraft *mc)
 
     if (mc->thePlayer2 != nullptr)
     {
+        if (mc->theWorld != nullptr && mc->theWorld->getWorldInfo() != nullptr)
+        {
+            NBTTagCompound *p2Tag = new NBTTagCompound();
+            mc->thePlayer2->writeToNBT(p2Tag);
+            mc->theWorld->getWorldInfo()->setPlayer2NBTTagCompound(p2Tag);
+        }
         if (mc->theWorld != nullptr)
             mc->theWorld->detachEntityForWorldChange(mc->thePlayer2);
         delete mc->thePlayer2;

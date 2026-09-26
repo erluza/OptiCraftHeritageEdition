@@ -1,6 +1,7 @@
 #include "net/minecraft/src/WorldSettings.h"
 #include "net/minecraft/src/WorldType.h"
 #include "net/minecraft/src/WorldInfo.h"
+#include "net/minecraft/src/NBTTagCompound.h"
 #include "client/Minecraft.h"
 #include "platform/Log.h"
 #include "platform/ConsoleAspectRatio.h"
@@ -2219,7 +2220,15 @@ void Minecraft::changeWorld(World *world, const std::string &s, EntityPlayerSP *
     if (oldWorld != nullptr && transferredPlayer != nullptr)
         oldWorld->detachEntityForWorldChange(transferredPlayer);
     if (oldWorld != nullptr && thePlayer2 != nullptr)
+    {
+        if (oldWorld->getWorldInfo() != nullptr)
+        {
+            NBTTagCompound *p2Tag = new NBTTagCompound();
+            thePlayer2->writeToNBT(p2Tag);
+            oldWorld->getWorldInfo()->setPlayer2NBTTagCompound(p2Tag);
+        }
         oldWorld->detachEntityForWorldChange(thePlayer2);
+    }
 
     statFileWriter->prepareStatsForSync();
     statFileWriter->syncStats();
