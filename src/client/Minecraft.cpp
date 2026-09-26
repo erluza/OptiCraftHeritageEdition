@@ -1799,8 +1799,9 @@ void Minecraft::runTick()
 
     if (currentScreen != nullptr)
     {
+        GuiScreen *screenBefore = currentScreen;
         currentScreen->handleInput();
-        if (currentScreen != nullptr)
+        if (currentScreen != nullptr && currentScreen == screenBefore)
         {
             if (currentScreen->guiParticles != nullptr)
                 currentScreen->guiParticles->updateParticles();

@@ -311,6 +311,8 @@ void GuiScreen::initGui()
 void GuiScreen::handleInput()
 {
 	handleSpecializedMenuInput();
+	if (mc != nullptr && mc->currentScreen != this)
+		return;
 #if PLATFORM_PS2 || PLATFORM_WII
 	// Console GUI helpers consume the platform snapshot here, after the native
 	// backend has published this frame's controller state and before queued

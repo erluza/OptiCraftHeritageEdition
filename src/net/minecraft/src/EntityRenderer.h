@@ -146,7 +146,7 @@ private:
     float fogColorBlue;
     float fogColor2;  // Valor anterior de niebla
     float fogColor1;  // Valor actual de niebla
-    float fovModifierHand;
+    float fovModifierHand[2];
     int lightmapTexture;
     std::vector<int_t> lightmapColors;
     bool lightmapUpdateNeeded;
@@ -161,7 +161,7 @@ private:
     float torchFlickerDX;
     float torchFlickerY;
     float torchFlickerDY;
-    float fovModifierHandPrev;
+    float fovModifierHandPrev[2];
     
     // Contador de actualizaciones del renderer
     int rendererUpdateCount;

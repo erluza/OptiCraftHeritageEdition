@@ -310,8 +310,10 @@ EntityRenderer::EntityRenderer(Minecraft* minecraft)
     fogColorBlue = 0.0f;
     fogColor2 = 0.0f;
     fogColor1 = 0.0f;
-    fovModifierHand = 1.0f;
-    fovModifierHandPrev = 1.0f;
+    fovModifierHand[0] = 1.0f;
+    fovModifierHand[1] = 1.0f;
+    fovModifierHandPrev[0] = 1.0f;
+    fovModifierHandPrev[1] = 1.0f;
     lightmapTexture = -1;
     lightmapColors.assign(256, static_cast<int_t>(0xff000000u));
     lightmapUpdateNeeded = true;
@@ -543,12 +545,21 @@ void EntityRenderer::enableLightmap(double)
 void EntityRenderer::updateRenderer()
 {
     updateTorchFlicker();
-    float targetFovMultiplier = 1.0f;
-    EntityPlayerSP *player = dynamic_cast<EntityPlayerSP *>(mc->renderViewEntity != nullptr ? mc->renderViewEntity : mc->thePlayer);
-    if (player != nullptr)
-        targetFovMultiplier = player->getFOVMultiplier();
-    fovModifierHandPrev = fovModifierHand;
-    fovModifierHand += (targetFovMultiplier - fovModifierHand) * 0.5f;
+    // Player 1 FOV smoothing
+    float targetFovMultiplier1 = 1.0f;
+    EntityPlayerSP *player1 = dynamic_cast<EntityPlayerSP *>(mc->thePlayerOne ? mc->thePlayerOne : mc->thePlayer);
+    if (player1 != nullptr)
+        targetFovMultiplier1 = player1->getFOVMultiplier();
+    fovModifierHandPrev[0] = fovModifierHand[0];
+    fovModifierHand[0] += (targetFovMultiplier1 - fovModifierHand[0]) * 0.5f;
+
+    // Player 2 FOV smoothing
+    float targetFovMultiplier2 = 1.0f;
+    EntityPlayerSP *player2 = dynamic_cast<EntityPlayerSP *>(mc->thePlayer2);
+    if (player2 != nullptr)
+        targetFovMultiplier2 = player2->getFOVMultiplier();
+    fovModifierHandPrev[1] = fovModifierHand[1];
+    fovModifierHand[1] += (targetFovMultiplier2 - fovModifierHand[1]) * 0.5f;
 
     // Interpolacion de niebla
     fogColor2 = fogColor1;
@@ -694,7 +705,8 @@ float EntityRenderer::getFOVModifier(float partialTicks, bool applyFovModifiers)
     if (applyFovModifiers)
     {
         fov += mc->gameSettings->fovSetting * 40.0f;
-        fov *= fovModifierHandPrev + (fovModifierHand - fovModifierHandPrev) * partialTicks;
+        const int pIdx = (mc->thePlayer2 != nullptr && mc->renderViewEntity == mc->thePlayer2) ? 1 : 0;
+        fov *= fovModifierHandPrev[pIdx] + (fovModifierHand[pIdx] - fovModifierHandPrev[pIdx]) * partialTicks;
     }
 
     // OptiFine 1.2.5 HD C6 (lr.java): hold the configured zoom binding,
